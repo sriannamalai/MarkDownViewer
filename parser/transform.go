@@ -78,8 +78,20 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		h.AnchorID = t.slug(document.PlainText(h))
 		return h
 	case *ast.Paragraph:
+		if t.cfg.Math {
+			if mb := mathBlockFromLines(n, t.src); mb != nil {
+				return mb
+			}
+		}
 		p := &document.Paragraph{}
 		t.appendChildren(p, n)
+		if t.cfg.Math {
+			if kids := p.Children(); len(kids) == 1 {
+				if mi, ok := kids[0].(*document.MathInline); ok && mi.Display {
+					return &document.MathBlock{Source: mi.Source}
+				}
+			}
+		}
 		return p
 	case *ast.TextBlock: // tight-list item content; List.Tight drives <p> omission
 		p := &document.Paragraph{}
@@ -225,6 +237,8 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		wl := &document.WikiLink{Target: string(n.Target)}
 		t.appendChildren(wl, n)
 		return wl
+	case *mathNode:
+		return &document.MathInline{Source: string(n.Source), Display: n.Display}
 	default:
 		return nil // extension nodes handled in Tasks 3-8
 	}
@@ -287,6 +301,32 @@ func (t *transformer) codeOrSpecial(lang, code string) document.Node {
 		return &document.MathBlock{Source: code}
 	}
 	return &document.CodeBlock{Language: lang, Code: code}
+}
+
+// mathBlockFromLines promotes a paragraph shaped like
+//
+//	$$
+//	...
+//	$$
+//
+// into a MathBlock.
+func mathBlockFromLines(n *ast.Paragraph, src []byte) *document.MathBlock {
+	l := n.Lines()
+	if l.Len() < 3 {
+		return nil
+	}
+	firstSeg, lastSeg := l.At(0), l.At(l.Len()-1)
+	first := strings.TrimSpace(string(firstSeg.Value(src)))
+	last := strings.TrimSpace(string(lastSeg.Value(src)))
+	if first != "$$" || last != "$$" {
+		return nil
+	}
+	var b strings.Builder
+	for i := 1; i < l.Len()-1; i++ {
+		seg := l.At(i)
+		b.Write(seg.Value(src))
+	}
+	return &document.MathBlock{Source: b.String()}
 }
 
 func blockLines(n ast.Node, src []byte) string {

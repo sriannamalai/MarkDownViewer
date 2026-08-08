@@ -66,5 +66,8 @@ func extensions(cfg Config) []goldmark.Extender {
 	if cfg.WikiLinks {
 		exts = append(exts, &wikilink.Extender{})
 	}
+	if cfg.Math {
+		exts = append(exts, mathExt{})
+	}
 	return exts
 }
