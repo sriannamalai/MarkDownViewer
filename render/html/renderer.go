@@ -10,8 +10,10 @@ import (
 )
 
 func Render(w io.Writer, doc *document.Document, opts Options) error {
-	// Full-page mode arrives in Task 12; render fragment for now.
-	return renderFragment(w, doc, opts)
+	if opts.Fragment {
+		return renderFragment(w, doc, opts)
+	}
+	return renderPage(w, doc, opts)
 }
 
 func renderFragment(w io.Writer, doc *document.Document, opts Options) error {
