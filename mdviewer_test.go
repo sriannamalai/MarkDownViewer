@@ -40,3 +40,18 @@ func TestParse(t *testing.T) {
 		t.Fatalf("doc: %v %v", doc, err)
 	}
 }
+
+func TestThemeCustomization(t *testing.T) {
+	out, _ := Render(
+		[]byte("# Hi\n"),
+		WithThemeOverrides(map[string]string{"--md-bg": "#f0f0f0"}),
+		WithStylesheet(".custom { color: blue; }"),
+	)
+	s := string(out)
+	if !strings.Contains(s, ":root{--md-bg:#f0f0f0;") {
+		t.Fatal("WithThemeOverrides not applied")
+	}
+	if !strings.Contains(s, ".custom { color: blue; }") {
+		t.Fatal("WithStylesheet not applied")
+	}
+}

@@ -26,6 +26,8 @@ type Options struct {
 	Math           bool   // KaTeX math support
 	HeadingAnchors bool   // id attributes on headings
 	Resolver       Resolver
+	ThemeOverrides map[string]string // CSS custom-property overrides (name → value)
+	Stylesheet     string            // non-empty replaces theme.BaseCSS() entirely
 }
 
 func DefaultOptions() Options {

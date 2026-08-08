@@ -3,6 +3,8 @@ package htmlrender
 import (
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 
 	"github.com/sriannamalai/markdownviewer/document"
 	"github.com/sriannamalai/markdownviewer/internal/assets"
@@ -27,6 +29,25 @@ func usesFeatures(doc *document.Document) (mermaid, math bool) {
 	return mermaid, math
 }
 
+// emitThemeOverrides emits CSS custom-property overrides in sorted key order.
+func emitThemeOverrides(overrides map[string]string) string {
+	if len(overrides) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(overrides))
+	for k := range overrides {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteString(":root{")
+	for _, k := range keys {
+		b.WriteString(k + ":" + overrides[k] + ";")
+	}
+	b.WriteString("}")
+	return b.String()
+}
+
 func renderPage(w io.Writer, doc *document.Document, opts Options) error {
 	th, err := theme.Get(opts.ThemeName)
 	if err != nil {
@@ -45,17 +66,31 @@ func renderPage(w io.Writer, doc *document.Document, opts Options) error {
 			return err
 		}
 		fmt.Fprint(w, theme.Dark().CSS(":root")+"\n"+darkChroma)
+		if overrides := emitThemeOverrides(opts.ThemeOverrides); overrides != "" {
+			fmt.Fprint(w, "\n"+overrides)
+		}
 	} else {
 		fmt.Fprint(w, th.CSS(":root")+"\n"+lightChroma)
+		if overrides := emitThemeOverrides(opts.ThemeOverrides); overrides != "" {
+			fmt.Fprint(w, "\n"+overrides)
+		}
 	}
 	if opts.ThemeName == "auto" || opts.ThemeName == "" {
 		darkChroma, err := chromaCSS(theme.Dark().ChromaStyle)
 		if err != nil {
 			return err
 		}
-		fmt.Fprint(w, "\n@media (prefers-color-scheme: dark){\n"+theme.Dark().CSS(":root")+"\n"+darkChroma+"}\n")
+		fmt.Fprint(w, "\n@media (prefers-color-scheme: dark){\n"+theme.Dark().CSS(":root")+"\n"+darkChroma)
+		if overrides := emitThemeOverrides(opts.ThemeOverrides); overrides != "" {
+			fmt.Fprint(w, "\n"+overrides)
+		}
+		fmt.Fprint(w, "}\n")
 	}
-	fmt.Fprint(w, theme.BaseCSS())
+	if opts.Stylesheet != "" {
+		fmt.Fprint(w, opts.Stylesheet)
+	} else {
+		fmt.Fprint(w, theme.BaseCSS())
+	}
 	if mathUsed && opts.Math {
 		fmt.Fprint(w, assets.KatexCSS())
 	}
