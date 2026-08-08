@@ -11,15 +11,17 @@ import (
 )
 
 type transformer struct {
-	src   []byte
-	cfg   Config
-	slugs map[string]int
-	item  *document.ListItem // innermost list item, for task checkboxes
+	src       []byte
+	cfg       Config
+	slugs     map[string]int
+	item      *document.ListItem // innermost list item, for task checkboxes
+	footnotes []*document.FootnoteDef
 }
 
 func (t *transformer) document(root ast.Node, ctx gparser.Context) *document.Document {
 	doc := &document.Document{}
 	t.appendChildren(doc, root)
+	doc.Footnotes = t.footnotes
 	_ = ctx // front-matter extraction added in Task 5
 	return doc
 }
@@ -172,6 +174,21 @@ func (t *transformer) convert(n ast.Node) document.Node {
 			t.item.Checked = n.IsChecked
 		}
 		return nil
+	case *east.FootnoteLink:
+		return &document.FootnoteRef{Index: n.Index}
+	case *east.FootnoteBacklink:
+		return nil // renderer generates backlinks
+	case *east.FootnoteList:
+		for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+			if def, ok := t.convert(c).(*document.FootnoteDef); ok {
+				t.footnotes = append(t.footnotes, def)
+			}
+		}
+		return nil
+	case *east.Footnote:
+		def := &document.FootnoteDef{Index: n.Index}
+		t.appendChildren(def, n)
+		return def
 	default:
 		return nil // extension nodes handled in Tasks 3-8
 	}

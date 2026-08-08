@@ -48,5 +48,8 @@ func extensions(cfg Config) []goldmark.Extender {
 	if cfg.Linkify {
 		exts = append(exts, extension.Linkify)
 	}
+	if cfg.Footnotes {
+		exts = append(exts, extension.Footnote)
+	}
 	return exts
 }
