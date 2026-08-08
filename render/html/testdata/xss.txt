@@ -11,3 +11,12 @@
 <body onload=alert(1)>
 [x]: javascript:alert(1)\n\n[x]
 <math><mtext></form><form><mglyph><svg><mtext><style><path id="</style><img onerror=alert(1) src>">
+
+# control-character scheme bypass — browsers strip <=0x20 before parsing
+# a URL's scheme, so a naive prefix blocklist can be evaded this way
+[click](jav	ascript:alert(1))
+[click](java\nscript:alert(1))
+[[jav	ascript:alert(1)]]
+
+# unknown scheme must be blocked by the allowlist, not just a blocklist
+[click](steam://run)

@@ -88,12 +88,15 @@ func TestUnsafeWikiLinkKeptWhenUnsafe(t *testing.T) {
 }
 
 func TestResolverCallback(t *testing.T) {
+	// Uses an allowlisted https scheme: safeURL's scheme allowlist (Task
+	// 11 hardening) applies uniformly to resolver output too, so a custom
+	// scheme like "vfs://" would now be blocked.
 	got := render(t, "![i](pic.png) [[P]]\n", func(o *Options) {
 		o.Resolver = func(kind ResolveKind, target string) (string, bool) {
-			return "vfs://" + target, true
+			return "https://vfs.example/" + target, true
 		}
 	})
-	if !strings.Contains(got, `src="vfs://pic.png"`) || !strings.Contains(got, `href="vfs://P"`) {
+	if !strings.Contains(got, `src="https://vfs.example/pic.png"`) || !strings.Contains(got, `href="https://vfs.example/P"`) {
 		t.Fatalf("got %q", got)
 	}
 }
