@@ -125,7 +125,30 @@ Full flag list: `-o FILE` (default stdout), `-theme light|dark|auto`
 (default `auto`), `-fragment`, `-unsafe`, `-no-mermaid`, `-no-math`,
 `-no-highlight`.
 
+## Concurrency
+
+All top-level functions (`Render`, `RenderTo`, `Parse`) are safe for
+concurrent use — they share no mutable state beyond two package-level
+values, constructed once and never mutated afterward: bluemonday's
+sanitizer `Policy` (documented safe to `Sanitize` concurrently once
+constructed) and chroma's HTML formatter (internally mutex-protected for
+concurrent `Format` calls). The one thing that isn't synchronized: a
+`*document.Document` returned by `Parse` must not be mutated while it's
+being read by a concurrent `Render`/`RenderTo` call, or by another
+mutation — `document.Document` has no internal locking of its own.
+
 ## Theming
+
+Fragment output (`Fragment()` / `mdview -fragment`) contains **no CSS or
+JS** — it's body-only markup. The host owns the page and must supply its
+own styling; `theme.BaseCSS()` and the theme CSS-variable sets below are
+there to reuse if useful. Diagram and math nodes still emit their markup in
+fragment mode (`<pre class="mermaid">…</pre>`, `<span class="math …">…`),
+but as **inert placeholders**: without mermaid.js/KaTeX loaded, a viewer
+sees the raw diagram/math source until the host supplies those libraries
+itself. This library's embedded copies of mermaid/KaTeX are bundled for
+full-page output only and aren't currently exported for fragment hosts to
+reuse (see the roadmap in [`docs/Design.md`](docs/Design.md#roadmap)).
 
 Built-in themes are CSS custom-property sets layered over one base
 stylesheet: `light`, `dark`, and `auto` (light by default, with a

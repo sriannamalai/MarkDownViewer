@@ -49,6 +49,31 @@ untrusted input back unexamined (see the `Resolver` trust contract in
 `mdviewer.go`), are generally **out of scope** — that mode is documented as
 trusting the caller.
 
+## Resource exhaustion
+
+Parsing is not bounded by a wall-clock or work budget, and at least one
+input shape is known to be pathological: **deeply nested lists**. goldmark's
+list-nesting logic is super-quadratic in nesting depth. Empirically, on
+typical hardware, a list nested ~2000 levels deep (about 16KB of input)
+takes roughly 6 seconds to parse; ~4000 levels takes more than 30 seconds.
+The cost is in goldmark's parser, not in this library's own code, and it
+scales with nesting *depth*, not input *size* — so a size cap on the input
+does not bound it; a small, deeply-indented file is enough.
+
+**If you render untrusted Markdown, wrap `Parse` / `Render` (or
+`parser.Parse` / `parser.ParseWith`) in a wall-clock timeout** — for example
+by running the call in a goroutine and racing it against a timer — and treat
+a timeout as a rejected input. Context-aware `Parse`/`Render` variants that
+support cancellation natively are on the roadmap (see `docs/Design.md`); no
+such variant exists yet.
+
+This is treated as a known, documented limitation for v0.1 rather than a
+vulnerability to patch: we do not intend to patch goldmark internals or add
+heuristics (e.g. guessing a "safe" nesting depth) that would be fragile and
+could reject legitimate input. Reports of *other* pathological input shapes
+(unbounded memory growth, other superlinear parse/render costs) are still
+welcome under the Scope section above.
+
 ## Disclosure credit
 
 With your permission, we're happy to credit reporters in release notes.

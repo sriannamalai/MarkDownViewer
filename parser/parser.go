@@ -1,5 +1,17 @@
 // Package parser converts Markdown source into the document model. goldmark
 // is an internal implementation detail and must not leak into the API.
+//
+// # Resource exhaustion
+//
+// Parse and ParseWith run goldmark's parser, whose list-nesting algorithm is
+// super-quadratic in nesting depth: a few thousand levels of nested list
+// items (an input on the order of tens of kilobytes) can take tens of
+// seconds to parse. This is parse-time cost inside goldmark, so limiting
+// input *size* does not bound it. Hosts that parse or render untrusted
+// input should enforce a wall-clock timeout around the call (e.g. run it in
+// a goroutine and select against a timer); context-aware Parse/Render
+// variants that support cancellation are on the roadmap. See SECURITY.md
+// for details.
 package parser
 
 import (
@@ -29,12 +41,18 @@ func stripBOM(src []byte) []byte {
 
 // Parse converts Markdown source into a document.Document using Default's
 // extension set.
+//
+// See the package doc comment for the resource-exhaustion caveat on deeply
+// nested list input.
 func Parse(src []byte) (*document.Document, error) {
 	return ParseWith(src, Default())
 }
 
 // ParseWith converts Markdown source into a document.Document using the
 // syntax extensions selected by cfg.
+//
+// See the package doc comment for the resource-exhaustion caveat on deeply
+// nested list input.
 func ParseWith(src []byte, cfg Config) (*document.Document, error) {
 	src = stripBOM(src)
 	md := build(cfg)

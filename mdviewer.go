@@ -1,12 +1,34 @@
 // Package markdownviewer is an embeddable Markdown previewer: it parses
-// Markdown (CommonMark + GFM + modern extensions) into a stable document
-// model and renders themed, self-contained, sanitized HTML.
+// Markdown (CommonMark + GFM + modern extensions) into a document model and
+// renders themed, self-contained, sanitized HTML.
 //
 // Quick start:
 //
 //	html, err := markdownviewer.Render(src)
 //
 // See the document package for the AST and render/html for renderer options.
+//
+// # Concurrency
+//
+// All top-level functions in this package (Parse, Render, RenderTo) are
+// safe for concurrent use: they share no mutable state across calls beyond
+// two package-level values that are constructed once and never mutated
+// afterward — bluemonday's sanitizer Policy (its README documents Sanitize
+// as safe to call concurrently on a constructed Policy; only
+// construction/editing is not) and chroma's HTML formatter (its style
+// cache is internally mutex-protected for concurrent Format calls). A
+// *document.Document returned by Parse must not be mutated concurrently
+// with a Render/RenderTo call that reads it, or with another mutation —
+// document.Document itself has no internal synchronization.
+//
+// # Resource exhaustion
+//
+// Parse/Render/RenderTo have no built-in wall-clock or work budget. A
+// deeply nested list (thousands of levels) can take goldmark's parser tens
+// of seconds even though the input itself is small, because the cost is
+// super-quadratic in nesting depth rather than in input size. Hosts that
+// process untrusted input should wrap these calls in their own wall-clock
+// timeout. See SECURITY.md for measurements and the recommended pattern.
 package markdownviewer
 
 import (
@@ -53,7 +75,17 @@ func WithTheme(name string) Option {
 	return func(c *config) { c.render.ThemeName = name }
 }
 
-// Fragment emits body-only HTML instead of a full page.
+// Fragment emits body-only HTML instead of a full page: no <html>/<head>,
+// no theme <style>, no embedded mermaid/KaTeX <script> assets. The host
+// owns the page and is responsible for supplying styling — see the
+// Theming section of README.md for the CSS variables the markup expects.
+//
+// Diagram and math nodes still render their markup (a <pre class="mermaid">
+// block, a <span>/<div class="math ...">), but as inert placeholders: with
+// no mermaid.js/KaTeX loaded, the raw diagram/math source is what a viewer
+// sees until the host provides those libraries itself. The embedded copies
+// this package bundles for full-page output are not currently exported for
+// fragment hosts to reuse (see docs/Design.md's Roadmap).
 func Fragment() Option {
 	return func(c *config) { c.render.Fragment = true }
 }
