@@ -1,0 +1,15 @@
+MarkDownViewer
+Copyright 2026 Sri Annamalai
+
+This product includes software developed by third parties:
+- goldmark (MIT) — https://github.com/yuin/goldmark
+- goldmark-emoji (MIT) — https://github.com/yuin/goldmark-emoji
+- goldmark-frontmatter (BSD-3-Clause) — https://github.com/abhinav/goldmark-frontmatter
+- goldmark-wikilink (BSD-3-Clause) — https://github.com/abhinav/goldmark-wikilink
+- chroma (MIT) — https://github.com/alecthomas/chroma
+- bluemonday (BSD-3-Clause) — https://github.com/microcosm-cc/bluemonday
+- mermaid (MIT), embedded — see third_party/mermaid/LICENSE
+- KaTeX (MIT), embedded — see third_party/katex/LICENSE
+
+See third_party/README.md for full version/license details of vendored
+assets and Go module dependencies, including transitive dependencies.
