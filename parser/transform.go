@@ -8,6 +8,7 @@ import (
 	east "github.com/yuin/goldmark/extension/ast"
 	gparser "github.com/yuin/goldmark/parser"
 	"go.abhg.dev/goldmark/frontmatter"
+	"go.abhg.dev/goldmark/wikilink"
 
 	"github.com/sriannamalai/markdownviewer/document"
 )
@@ -220,6 +221,10 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		dd := &document.DefinitionDesc{}
 		t.appendChildren(dd, n)
 		return dd
+	case *wikilink.Node:
+		wl := &document.WikiLink{Target: string(n.Target)}
+		t.appendChildren(wl, n)
+		return wl
 	default:
 		return nil // extension nodes handled in Tasks 3-8
 	}

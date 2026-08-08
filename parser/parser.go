@@ -9,6 +9,7 @@ import (
 	gparser "github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 	"go.abhg.dev/goldmark/frontmatter"
+	"go.abhg.dev/goldmark/wikilink"
 
 	"github.com/sriannamalai/markdownviewer/document"
 )
@@ -61,6 +62,9 @@ func extensions(cfg Config) []goldmark.Extender {
 	}
 	if cfg.Emoji {
 		exts = append(exts, emoji.Emoji)
+	}
+	if cfg.WikiLinks {
+		exts = append(exts, &wikilink.Extender{})
 	}
 	return exts
 }
