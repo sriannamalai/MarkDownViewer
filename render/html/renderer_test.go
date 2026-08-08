@@ -70,6 +70,23 @@ func TestWikiLinkDefaultResolution(t *testing.T) {
 	}
 }
 
+func TestUnsafeWikiLinkStripped(t *testing.T) {
+	got := render(t, "[[javascript:alert(1)]]\n", nil)
+	if strings.Contains(got, "href=") {
+		t.Fatalf("blocked wikilink should have no href attribute: %q", got)
+	}
+	if !strings.Contains(got, `<a class="wikilink">javascript:alert(1)</a>`) {
+		t.Fatalf("blocked wikilink should render without href but keep class: %q", got)
+	}
+}
+
+func TestUnsafeWikiLinkKeptWhenUnsafe(t *testing.T) {
+	got := render(t, "[[javascript:alert(1)]]\n", func(o *Options) { o.Unsafe = true })
+	if !strings.Contains(got, `href="javascript:alert(1).md"`) {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestResolverCallback(t *testing.T) {
 	got := render(t, "![i](pic.png) [[P]]\n", func(o *Options) {
 		o.Resolver = func(kind ResolveKind, target string) (string, bool) {

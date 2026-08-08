@@ -322,8 +322,11 @@ func (r *writer) inline(n document.Node) {
 		}
 		r.raw(`<img src="` + u + `" alt="` + esc(n.Alt) + `"` + t + ">")
 	case *document.WikiLink:
-		u := r.href(ResolveWikiLink, n.Target)
-		r.raw(`<a href="` + u + `" class="wikilink">`)
+		if u := r.href(ResolveWikiLink, n.Target); u != "" {
+			r.raw(`<a href="` + u + `" class="wikilink">`)
+		} else {
+			r.raw(`<a class="wikilink">`)
+		}
 		r.inlines(n)
 		r.raw("</a>")
 	case *document.MathInline:
