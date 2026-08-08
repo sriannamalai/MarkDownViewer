@@ -75,6 +75,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	noMermaid := fs.Bool("no-mermaid", false, "disable mermaid diagrams")
 	noMath := fs.Bool("no-math", false, "disable KaTeX math")
 	noHighlight := fs.Bool("no-highlight", false, "disable syntax highlighting")
+	width := fs.String("width", "", `max content width, any CSS length (e.g. "860px", "70ch"); default is fluid (no max-width)`)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -112,6 +113,9 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	}
 	if *noHighlight {
 		opts = append(opts, viewer.DisableHighlighting())
+	}
+	if *width != "" {
+		opts = append(opts, viewer.WithMaxWidth(*width))
 	}
 
 	w := stdout

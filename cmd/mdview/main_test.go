@@ -97,6 +97,28 @@ func TestMdviewVersionDevelWhenNoBuildInfo(t *testing.T) {
 	}
 }
 
+func TestRunWidthFlag(t *testing.T) {
+	var out bytes.Buffer
+	err := run([]string{"-width", "700px"}, strings.NewReader("# Hi\n"), &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "--md-max-width:700px;") {
+		t.Fatalf("got %q", out.String())
+	}
+}
+
+func TestRunNoWidthFlagIsFluid(t *testing.T) {
+	var out bytes.Buffer
+	err := run(nil, strings.NewReader("# Hi\n"), &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "--md-max-width:") {
+		t.Fatalf("no -width flag should leave the page fluid (no --md-max-width override), got %q", out.String())
+	}
+}
+
 func TestRunBadThemeWithOutput(t *testing.T) {
 	f, err := os.CreateTemp("", "mdview-test-*.html")
 	if err != nil {

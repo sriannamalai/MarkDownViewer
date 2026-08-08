@@ -55,6 +55,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"strings"
 
 	"github.com/sriannamalai/markdownviewer/document"
 	"github.com/sriannamalai/markdownviewer/parser"
@@ -147,6 +148,38 @@ func WithResolver(r Resolver) Option {
 // <style> element; </style sequences are stripped defensively.
 func WithThemeOverrides(vars map[string]string) Option {
 	return func(c *config) { c.render.ThemeOverrides = vars }
+}
+
+// WithMaxWidth constrains the rendered page's content width, via the
+// --md-max-width CSS custom property (theme.BaseCSS's
+// "max-width: var(--md-max-width, none)"). width accepts any CSS length,
+// e.g. "860px" or "70ch". The default is fluid: an empty string (or never
+// calling this option) leaves --md-max-width unset, so the page has no
+// max-width constraint and fills its container.
+//
+// width flows into a CSS custom-property value inside the page's <style>
+// element. As a defense-in-depth measure on top of the usual </style
+// stripping applied to all theme override values, a width containing ';' or
+// '}' — either of which could break out of the single declaration this
+// option controls — is rejected outright: the option no-ops, leaving
+// whatever width was already configured (or the fluid default) unchanged,
+// rather than emitting a truncated or defanged value.
+//
+// Implemented via the same mechanism as WithThemeOverrides (it sets the
+// "--md-max-width" key), so calling WithThemeOverrides after WithMaxWidth
+// replaces the whole override map, including this key; call WithMaxWidth
+// after WithThemeOverrides (or fold "--md-max-width" into that map
+// directly) if you need both.
+func WithMaxWidth(width string) Option {
+	return func(c *config) {
+		if width == "" || strings.ContainsAny(width, ";}") {
+			return
+		}
+		if c.render.ThemeOverrides == nil {
+			c.render.ThemeOverrides = map[string]string{}
+		}
+		c.render.ThemeOverrides["--md-max-width"] = width
+	}
 }
 
 // WithSourceMap annotates top-level block elements with data-md-line

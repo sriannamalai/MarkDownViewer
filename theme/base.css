@@ -9,7 +9,7 @@ body.markdown-body {
     Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   font-size: 16px;
   line-height: 1.6;
-  max-width: 860px;
+  max-width: var(--md-max-width, none);
   margin: 0 auto;
   padding: 32px 24px 64px;
   word-wrap: break-word;

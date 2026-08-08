@@ -98,6 +98,75 @@ func TestThemeCustomization(t *testing.T) {
 	}
 }
 
+// TestDefaultLayoutIsFluid is the v0.3 behavior-change guard: the page no
+// longer carries a fixed max-width by default (theme/base.css now reads
+// "max-width: var(--md-max-width, none)"), so a plain Render has no
+// --md-max-width override and the property resolves to "none".
+func TestDefaultLayoutIsFluid(t *testing.T) {
+	out, err := Render([]byte("# Hi\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	if strings.Contains(s, "--md-max-width:") {
+		t.Fatalf("default render should not set --md-max-width, got %q", s)
+	}
+	if !strings.Contains(s, "max-width: var(--md-max-width, none)") {
+		t.Fatalf("base.css should fall back to a fluid (none) max-width, got %q", s)
+	}
+}
+
+func TestWithMaxWidth(t *testing.T) {
+	out, err := Render([]byte("# Hi\n"), WithMaxWidth("700px"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "--md-max-width:700px;") {
+		t.Fatalf("got %q", out)
+	}
+}
+
+func TestWithMaxWidthEmptyStaysFluid(t *testing.T) {
+	out, err := Render([]byte("# Hi\n"), WithMaxWidth(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "--md-max-width:") {
+		t.Fatalf("empty WithMaxWidth should leave the page fluid, got %q", out)
+	}
+}
+
+// TestWithMaxWidthRejectsHostileValue is the neutralization test for issue
+// 3's validation requirement: width flows into a CSS custom-property value
+// position inside the page's <style> element, so a value that could close
+// the declaration early (';' or '}') is rejected outright rather than
+// emitted defanged — the option no-ops and the page stays at its otherwise
+// configured width (fluid, here).
+func TestWithMaxWidthRejectsHostileValue(t *testing.T) {
+	hostile := "800px}body{display:none"
+	out, err := Render([]byte("# Hi\n"), WithMaxWidth(hostile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	if strings.Contains(s, "display:none") || strings.Contains(s, "800px}body") {
+		t.Fatalf("hostile width value was not neutralized, got %q", s)
+	}
+	if strings.Contains(s, "--md-max-width:") {
+		t.Fatalf("hostile width value should have been rejected entirely, got %q", s)
+	}
+}
+
+func TestWithMaxWidthRejectsSemicolon(t *testing.T) {
+	out, err := Render([]byte("# Hi\n"), WithMaxWidth("860px;--md-bg:red"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "--md-max-width:") {
+		t.Fatalf("semicolon-bearing width value should have been rejected, got %q", out)
+	}
+}
+
 // TestBOMPrefixedInput verifies a leading UTF-8 BOM doesn't defeat heading
 // recognition through the facade (the CLI and any host that reads a file
 // verbatim go through this path).
