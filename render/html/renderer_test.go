@@ -123,6 +123,68 @@ func TestTaskListCheckboxes(t *testing.T) {
 	}
 }
 
+// TestTightTaskListInlineShape is the tight-list half of issue 4: checkbox
+// stays inline, directly before the item's text, with no wrapping <p> —
+// unchanged from before except for the new class attributes.
+func TestTightTaskListInlineShape(t *testing.T) {
+	got := render(t, "- [x] done\n- [ ] todo\n", nil)
+	want := "<ul class=\"contains-task-list\">\n" +
+		"<li class=\"task-list-item\"><input type=\"checkbox\" checked disabled /> done</li>\n" +
+		"<li class=\"task-list-item\"><input type=\"checkbox\" disabled /> todo</li>\n" +
+		"</ul>\n"
+	if got != want {
+		t.Fatalf("\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestLooseTaskListChecksboxInsideParagraph is the loose-list half of issue
+// 4: previously the checkbox rendered as a sibling before the <p>, which
+// pushed the item's text onto its own line/block (a bullet-shaped checkbox
+// floating above disconnected text). It must render inside the first
+// paragraph instead, matching cmark-gfm's shape.
+func TestLooseTaskListCheckboxInsideParagraph(t *testing.T) {
+	got := render(t, "- [x] done\n\n- [ ] todo\n\n  second paragraph\n", nil)
+	want := "<ul class=\"contains-task-list\">\n" +
+		"<li class=\"task-list-item\">\n<p><input type=\"checkbox\" checked disabled /> done</p>\n</li>\n" +
+		"<li class=\"task-list-item\">\n<p><input type=\"checkbox\" disabled /> todo</p>\n<p>second paragraph</p>\n</li>\n" +
+		"</ul>\n"
+	if got != want {
+		t.Fatalf("\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestTaskListClassesOnlyOnTaskItems verifies a list that mixes task and
+// plain items only tags the task <li>s, and that a list with no task items
+// at all gets neither class.
+func TestTaskListClassesOnlyOnTaskItems(t *testing.T) {
+	got := render(t, "- [x] done\n- plain item\n", nil)
+	if !strings.Contains(got, `<li class="task-list-item">`) {
+		t.Errorf("task item missing class: %q", got)
+	}
+	if !strings.Contains(got, "<li>plain item</li>") {
+		t.Errorf("plain item should not get task-list-item class: %q", got)
+	}
+
+	gotPlain := render(t, "- a\n- b\n", nil)
+	if strings.Contains(gotPlain, "task-list-item") || strings.Contains(gotPlain, "contains-task-list") {
+		t.Errorf("plain list should carry no task-list classes: %q", gotPlain)
+	}
+}
+
+// TestEmptyLooseTaskItemFallsBackToSiblingCheckbox covers the loose-item
+// edge case with no paragraph to attach the checkbox to (an empty task
+// item): it must still render, falling back to the tight-style sibling
+// checkbox rather than being dropped or panicking.
+func TestEmptyLooseTaskItemFallsBackToSiblingCheckbox(t *testing.T) {
+	got := render(t, "- [ ]\n\n- next item\n", nil)
+	if !strings.Contains(got, `<li class="task-list-item">`) {
+		t.Fatalf("got %q", got)
+	}
+	if !strings.Contains(got, `<input type="checkbox" disabled />`) {
+		t.Fatalf("checkbox missing: %q", got)
+	}
+}
+
 // renderHandBuiltDoc renders a hand-built *document.Document directly, bypassing the
 // parser entirely — for exercising Render's defensive handling of
 // host-constructed trees that don't match the shapes the parser produces.

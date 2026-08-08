@@ -17,6 +17,12 @@ A paragraph with *em*, **strong**, `code span`, and ~~strike~~ text.
 * [x] Done task
 * [ ] Todo task
 
+- [x] Loose done task
+
+- [ ] Loose todo task
+
+  Second paragraph in the loose task item.
+
 + Loose alpha
 
 + Loose beta

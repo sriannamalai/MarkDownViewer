@@ -146,9 +146,17 @@ body.markdown-body {
   box-sizing: border-box;
 }
 
-.markdown-body ul.contains-task-list,
-.markdown-body li input[type="checkbox"] {
-  margin-right: 0.5em;
+.markdown-body .contains-task-list {
+  padding-left: 0;
+}
+
+.markdown-body .task-list-item {
+  list-style-type: none;
+}
+
+.markdown-body .task-list-item input[type="checkbox"] {
+  margin: 0 0.5em 0.25em -1.4em;
+  vertical-align: middle;
 }
 
 .markdown-body .admonition {

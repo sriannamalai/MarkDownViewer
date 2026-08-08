@@ -164,7 +164,11 @@ func (r *writer) block(n document.Node, tight bool) {
 				attrs = fmt.Sprintf(` start="%d"`, n.Start)
 			}
 		}
-		r.raw("<" + tag + attr + attrs + ">\n")
+		cls := ""
+		if listHasTaskItem(n) {
+			cls = ` class="contains-task-list"`
+		}
+		r.raw("<" + tag + attr + cls + attrs + ">\n")
 		for _, li := range n.Children() {
 			if item, ok := li.(*document.ListItem); ok {
 				r.listItem(item, n.Tight)
@@ -228,8 +232,25 @@ func (r *writer) inlines(n document.Node) {
 	}
 }
 
+// listHasTaskItem reports whether any direct ListItem child of n is a task
+// item, so the enclosing <ul>/<ol> can carry class="contains-task-list"
+// (base.css uses it to zero the list's own indent, since task items supply
+// their own via a negative checkbox margin).
+func listHasTaskItem(n *document.List) bool {
+	for _, c := range n.Children() {
+		if li, ok := c.(*document.ListItem); ok && li.Task {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *writer) listItem(li *document.ListItem, tight bool) {
 	kids := li.Children()
+	liClass := ""
+	if li.Task {
+		liClass = ` class="task-list-item"`
+	}
 	// A list item with no block content at all renders as the bare
 	// "<li></li>", with none of the internal newlines either branch below
 	// would otherwise add (CommonMark spec example 315).
@@ -238,7 +259,7 @@ func (r *writer) listItem(li *document.ListItem, tight bool) {
 		return
 	}
 	if tight {
-		r.raw("<li>")
+		r.raw("<li" + liClass + ">")
 		if li.Task {
 			r.checkbox(li.Checked)
 		}
@@ -275,8 +296,32 @@ func (r *writer) listItem(li *document.ListItem, tight bool) {
 		r.raw("</li>\n")
 		return
 	}
-	r.raw("<li>\n")
+	// Loose item. A loose task item nests its checkbox inside the first
+	// paragraph's <p> — <li><p><input.../> text</p>…</li>, matching
+	// cmark-gfm — rather than as a sibling before it: a checkbox sibling
+	// before the <p> pushes the paragraph's text onto its own line/block,
+	// which reads as the checkbox floating above disconnected text instead
+	// of leading it.
+	r.raw("<li" + liClass + ">\n")
 	if li.Task {
+		if len(kids) > 0 {
+			if p, ok := kids[0].(*document.Paragraph); ok {
+				pAttr := r.lineAttr
+				r.lineAttr = ""
+				r.raw("<p" + pAttr + ">")
+				r.checkbox(li.Checked)
+				r.inlines(p)
+				r.raw("</p>\n")
+				for _, c := range kids[1:] {
+					r.block(c, false)
+				}
+				r.raw("</li>\n")
+				return
+			}
+		}
+		// No paragraph to attach the checkbox to (an empty task item, or
+		// one whose first block isn't a paragraph) — fall back to emitting
+		// it before the item's blocks, same as the tight shape.
 		r.checkbox(li.Checked)
 	}
 	r.blocks(li, false)

@@ -21,17 +21,17 @@
   },
   {
     "markdown": "- [ ] todo item\n",
-    "html": "<ul>\n<li><input type=\"checkbox\" disabled /> todo item</li>\n</ul>\n",
+    "html": "<ul class=\"contains-task-list\">\n<li class=\"task-list-item\"><input type=\"checkbox\" disabled /> todo item</li>\n</ul>\n",
     "example": 5
   },
   {
     "markdown": "- [x] done item\n",
-    "html": "<ul>\n<li><input type=\"checkbox\" checked disabled /> done item</li>\n</ul>\n",
+    "html": "<ul class=\"contains-task-list\">\n<li class=\"task-list-item\"><input type=\"checkbox\" checked disabled /> done item</li>\n</ul>\n",
     "example": 6
   },
   {
     "markdown": "- [x] done\n- [ ] todo\n- normal item\n",
-    "html": "<ul>\n<li><input type=\"checkbox\" checked disabled /> done</li>\n<li><input type=\"checkbox\" disabled /> todo</li>\n<li>normal item</li>\n</ul>\n",
+    "html": "<ul class=\"contains-task-list\">\n<li class=\"task-list-item\"><input type=\"checkbox\" checked disabled /> done</li>\n<li class=\"task-list-item\"><input type=\"checkbox\" disabled /> todo</li>\n<li>normal item</li>\n</ul>\n",
     "example": 7
   },
   {
