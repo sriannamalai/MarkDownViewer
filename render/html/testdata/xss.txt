@@ -1,0 +1,13 @@
+# classic vectors — one markdown snippet per line
+<script>alert(1)</script>
+<img src=x onerror=alert(1)>
+<svg onload=alert(1)>
+[click](javascript:alert(1))
+[click](JaVaScRiPt:alert(1))
+![img](javascript:alert(1))
+<iframe srcdoc="<script>alert(1)</script>"></iframe>
+<a href="vbscript:msgbox(1)">x</a>
+<details open ontoggle=alert(1)>
+<body onload=alert(1)>
+[x]: javascript:alert(1)\n\n[x]
+<math><mtext></form><form><mglyph><svg><mtext><style><path id="</style><img onerror=alert(1) src>">

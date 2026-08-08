@@ -358,10 +358,16 @@ func (r *writer) inline(n document.Node) {
 	}
 }
 
-// rawHTML passes raw markdown HTML through; sanitization lands in Task 11.
+// rawHTML sanitizes raw markdown HTML with bluemonday's UGC policy by
+// default, stripping scripts, event handlers, and other XSS vectors.
+// Unsafe mode passes it through verbatim.
 func (r *writer) rawHTML(s string, block bool) {
-	r.raw(s) // Task 11 replaces this body
-	if block && !strings.HasSuffix(s, "\n") {
+	out := s
+	if !r.opts.Unsafe {
+		out = sanitizePolicy.Sanitize(s)
+	}
+	r.raw(out)
+	if block && !strings.HasSuffix(out, "\n") {
 		r.raw("\n")
 	}
 }
