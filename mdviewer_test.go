@@ -1,8 +1,12 @@
 package markdownviewer
 
 import (
+	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/sriannamalai/markdownviewer/document"
+	"github.com/sriannamalai/markdownviewer/parser"
 )
 
 func TestRenderDefaults(t *testing.T) {
@@ -102,5 +106,46 @@ func TestBOMPrefixedInput(t *testing.T) {
 	}
 	if !strings.Contains(string(out), `<h1 id="hi">Hi</h1>`) {
 		t.Fatalf("BOM not stripped before parsing, got %q", out)
+	}
+}
+
+func TestRenderDocParity(t *testing.T) {
+	src := []byte("# Hi\n\n*em* [[W]]\n")
+	direct, err := Render(src, Fragment())
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	viaDoc, err := RenderDoc(doc, Fragment())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(direct, viaDoc) {
+		t.Fatalf("parity broken:\n%s\nvs\n%s", direct, viaDoc)
+	}
+}
+
+func TestWithParserConfig(t *testing.T) {
+	cfg := parser.Default()
+	cfg.WikiLinks = false
+	out, err := Render([]byte("[[NotALink]]\n"), Fragment(), WithParserConfig(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "wikilink") {
+		t.Fatalf("wikilinks should be disabled: %q", out)
+	}
+}
+
+func TestFacadeParseWith(t *testing.T) {
+	doc, err := ParseWith([]byte("~~x~~\n"), parser.CommonMarkOnly())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(document.Dump(doc), "Strikethrough") {
+		t.Fatal("CommonMarkOnly must not parse strikethrough")
 	}
 }

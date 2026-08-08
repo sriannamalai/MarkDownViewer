@@ -10,25 +10,29 @@
 //
 // # Concurrency
 //
-// All top-level functions in this package (Parse, Render, RenderTo) are
-// safe for concurrent use: they share no mutable state across calls beyond
-// two package-level values that are constructed once and never mutated
-// afterward — bluemonday's sanitizer Policy (its README documents Sanitize
-// as safe to call concurrently on a constructed Policy; only
-// construction/editing is not) and chroma's HTML formatter (its style
-// cache is internally mutex-protected for concurrent Format calls). A
-// *document.Document returned by Parse must not be mutated concurrently
-// with a Render/RenderTo call that reads it, or with another mutation —
-// document.Document itself has no internal synchronization.
+// All top-level functions in this package (Parse, ParseWith, Render,
+// RenderTo, RenderDoc, RenderDocTo) are safe for concurrent use: they share
+// no mutable state across calls beyond two package-level values that are
+// constructed once and never mutated afterward — bluemonday's sanitizer
+// Policy (its README documents Sanitize as safe to call concurrently on a
+// constructed Policy; only construction/editing is not) and chroma's HTML
+// formatter (its style cache is internally mutex-protected for concurrent
+// Format calls). A *document.Document returned by Parse/ParseWith must not
+// be mutated concurrently with a Render/RenderTo/RenderDoc/RenderDocTo call
+// that reads it, or with another mutation — document.Document itself has no
+// internal synchronization.
 //
 // # Resource exhaustion
 //
-// Parse/Render/RenderTo have no built-in wall-clock or work budget. A
-// deeply nested list (thousands of levels) can take goldmark's parser tens
-// of seconds even though the input itself is small, because the cost is
-// super-quadratic in nesting depth rather than in input size. Hosts that
-// process untrusted input should wrap these calls in their own wall-clock
-// timeout. See SECURITY.md for measurements and the recommended pattern.
+// Parse/ParseWith/Render/RenderTo have no built-in wall-clock or work
+// budget. A deeply nested list (thousands of levels) can take goldmark's
+// parser tens of seconds even though the input itself is small, because the
+// cost is super-quadratic in nesting depth rather than in input size. Hosts
+// that process untrusted input should wrap these calls in their own
+// wall-clock timeout. See SECURITY.md for measurements and the recommended
+// pattern. RenderDoc/RenderDocTo receive an already-parsed tree and so are
+// not subject to the parse-time cost, but rendering a pathologically deep
+// tree built by other means can still be costly.
 package markdownviewer
 
 import (
@@ -64,7 +68,9 @@ const (
 )
 
 type config struct {
-	render htmlrender.Options
+	render   htmlrender.Options
+	parse    parser.Config
+	parseSet bool
 }
 
 // Option is a functional option that modifies render configuration.
@@ -137,8 +143,30 @@ func WithStylesheet(css string) Option {
 	return func(c *config) { c.render.Stylesheet = css }
 }
 
+// WithParserConfig selects which Markdown extensions the parser enables
+// when Render/RenderTo (and their Context variants) parse the source.
+// It has no effect on RenderDoc, which receives an already-parsed tree.
+func WithParserConfig(cfg parser.Config) Option {
+	return func(c *config) { c.parse, c.parseSet = cfg, true }
+}
+
+// newConfig folds opts into a config seeded with default render options,
+// shared by RenderTo and RenderDocTo so option-folding happens exactly once.
+func newConfig(opts []Option) *config {
+	cfg := &config{render: htmlrender.DefaultOptions()}
+	for _, o := range opts {
+		o(cfg)
+	}
+	return cfg
+}
+
 // Parse returns the document model for src.
 func Parse(src []byte) (*document.Document, error) { return parser.Parse(src) }
+
+// ParseWith parses src with an explicit extension configuration.
+func ParseWith(src []byte, cfg parser.Config) (*document.Document, error) {
+	return parser.ParseWith(src, cfg)
+}
 
 // Render parses src and renders HTML with the given options.
 func Render(src []byte, opts ...Option) ([]byte, error) {
@@ -151,13 +179,30 @@ func Render(src []byte, opts ...Option) ([]byte, error) {
 
 // RenderTo renders into w.
 func RenderTo(w io.Writer, src []byte, opts ...Option) error {
-	cfg := &config{render: htmlrender.DefaultOptions()}
-	for _, o := range opts {
-		o(cfg)
+	cfg := newConfig(opts)
+	parseCfg := parser.Default()
+	if cfg.parseSet {
+		parseCfg = cfg.parse
 	}
-	doc, err := parser.Parse(src)
+	doc, err := parser.ParseWith(src, parseCfg)
 	if err != nil {
 		return err
 	}
+	return htmlrender.Render(w, doc, cfg.render)
+}
+
+// RenderDoc renders an already-parsed document, enabling parse-once /
+// render-many workflows such as switching themes without re-parsing.
+func RenderDoc(doc *document.Document, opts ...Option) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := RenderDocTo(&buf, doc, opts...); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// RenderDocTo renders an already-parsed document into w.
+func RenderDocTo(w io.Writer, doc *document.Document, opts ...Option) error {
+	cfg := newConfig(opts)
 	return htmlrender.Render(w, doc, cfg.render)
 }
