@@ -129,7 +129,7 @@ func (r *writer) block(n document.Node, tight bool) {
 		}
 		r.raw("</" + tag + ">\n")
 	case *document.CodeBlock:
-		r.codeBlock(n) // plain now; chroma path added in Task 10
+		r.codeBlock(n)
 	case *document.Diagram:
 		if r.opts.Mermaid && n.Engine == "mermaid" {
 			r.raw(`<pre class="mermaid">` + esc(n.Source) + "</pre>\n")
@@ -216,6 +216,16 @@ func (r *writer) checkbox(checked bool) {
 }
 
 func (r *writer) codeBlock(n *document.CodeBlock) {
+	if r.opts.Highlight {
+		var b strings.Builder
+		if highlight(&b, n.Code, n.Language) {
+			r.raw(b.String())
+			if !strings.HasSuffix(b.String(), "\n") {
+				r.raw("\n")
+			}
+			return
+		}
+	}
 	cls := ""
 	if n.Language != "" {
 		cls = ` class="language-` + esc(n.Language) + `"`
