@@ -31,12 +31,30 @@ import (
 // utf8BOM is the UTF-8 encoding of U+FEFF (byte order mark).
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
+// invalidUTF8Replacement is substituted for each maximal run of invalid
+// UTF-8 bytes in the source, mirroring what encoding/json's string encoder
+// already does silently when a Text/CodeSpan/... value reaches MarshalJSON
+// (see document/json.go). Sanitizing up front, before goldmark ever sees
+// the bytes, keeps every string field the parser derives from the source
+// already valid UTF-8, so JSON round-trips are lossless instead of
+// silently diverging from the pre-JSON tree.
+var invalidUTF8Replacement = []byte("�")
+
 // stripBOM removes a leading UTF-8 byte order mark, if present. goldmark
 // treats a BOM as ordinary text content rather than as whitespace, which
 // otherwise breaks recognition of block-level constructs like "# Heading"
 // on the first line.
 func stripBOM(src []byte) []byte {
 	return bytes.TrimPrefix(src, utf8BOM)
+}
+
+// sanitizeUTF8 replaces invalid UTF-8 byte sequences with the Unicode
+// replacement character. Markdown source is not guaranteed to be valid
+// UTF-8 (e.g. fuzzed or mis-decoded input), but every consumer downstream
+// of this package — goldmark's own text handling, Span byte offsets, and
+// the JSON codec in package document — assumes it is.
+func sanitizeUTF8(src []byte) []byte {
+	return bytes.ToValidUTF8(src, invalidUTF8Replacement)
 }
 
 // Parse converts Markdown source into a document.Document using Default's
@@ -54,7 +72,7 @@ func Parse(src []byte) (*document.Document, error) {
 // See the package doc comment for the resource-exhaustion caveat on deeply
 // nested list input.
 func ParseWith(src []byte, cfg Config) (*document.Document, error) {
-	src = stripBOM(src)
+	src = sanitizeUTF8(stripBOM(src))
 	md := build(cfg)
 	ctx := gparser.NewContext()
 	root := md.Parser().Parse(text.NewReader(src), gparser.WithContext(ctx))

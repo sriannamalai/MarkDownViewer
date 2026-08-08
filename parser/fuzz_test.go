@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/sriannamalai/markdownviewer/document"
 	"github.com/sriannamalai/markdownviewer/parser"
 	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
 )
@@ -28,5 +29,27 @@ func FuzzParseRender(f *testing.F) {
 		opts := htmlrender.DefaultOptions()
 		opts.Fragment = true
 		_ = htmlrender.Render(&buf, doc, opts)
+	})
+}
+
+func FuzzJSONRoundTrip(f *testing.F) {
+	f.Add([]byte("# h\n\npara *em*\n\n- [x] t\n\n| a |\n|---|\n| b |\n"))
+	f.Add([]byte("> [!NOTE]\n> x\n\n$m$\n\n```mermaid\ng\n```\n\ntext[^1]\n\n[^1]: n\n"))
+	f.Fuzz(func(t *testing.T, data []byte) {
+		doc, err := parser.Parse(data)
+		if err != nil {
+			return
+		}
+		out, err := document.MarshalJSON(doc)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		back, err := document.UnmarshalJSON(out)
+		if err != nil {
+			t.Fatalf("unmarshal: %v\njson: %s", err, out)
+		}
+		if document.Dump(doc) != document.Dump(back) {
+			t.Fatalf("round trip changed tree")
+		}
 	})
 }

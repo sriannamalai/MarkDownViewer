@@ -73,7 +73,8 @@ func (c *Container) SetSpan(s Span) { c.span = s }
 // [StartOffset, EndOffset). The zero Span means "position unknown". In
 // v0.2 only block-level nodes are populated; inline spans are reserved
 // for future use. Offsets are relative to the source AFTER any leading
-// UTF-8 BOM has been stripped.
+// UTF-8 BOM has been stripped and any invalid UTF-8 byte sequences have
+// been replaced with the Unicode replacement character.
 type Span struct {
 	StartLine, EndLine     int
 	StartOffset, EndOffset int
