@@ -1,9 +1,39 @@
 package htmlrender
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/sriannamalai/markdownviewer/document"
+	"github.com/sriannamalai/markdownviewer/parser"
 )
+
+type failAfterWriter struct {
+	bytesWritten int
+	failAfter    int
+}
+
+func (w *failAfterWriter) Write(p []byte) (int, error) {
+	if w.bytesWritten >= w.failAfter {
+		return 0, errors.New("write failed")
+	}
+	avail := w.failAfter - w.bytesWritten
+	if len(p) > avail {
+		p = p[:avail]
+	}
+	w.bytesWritten += len(p)
+	return len(p), nil
+}
+
+func renderDoc(t *testing.T, md string) *document.Document {
+	t.Helper()
+	parsed, err := parser.Parse([]byte(md))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return parsed
+}
 
 func TestFullPage(t *testing.T) {
 	got := render(t, "# Hi\n", func(o *Options) { o.Fragment = false; o.ThemeName = "auto" })
@@ -155,5 +185,19 @@ func TestThemeOverrideKeyValidation(t *testing.T) {
 	// Verify valid key is emitted
 	if !strings.Contains(got, "--md-valid-key:blue") {
 		t.Error("valid key should be emitted")
+	}
+}
+
+func TestRenderPageWriteError(t *testing.T) {
+	doc := renderDoc(t, "# Hi\n")
+	opts := Options{Fragment: false, ThemeName: "light"}
+	// Fail very early, during the doctype write
+	fw := &failAfterWriter{failAfter: 1}
+	err := renderPage(fw, doc, opts)
+	if err == nil {
+		t.Fatal("expected error when write fails")
+	}
+	if err.Error() != "write failed" {
+		t.Errorf("expected 'write failed' error, got %q", err)
 	}
 }

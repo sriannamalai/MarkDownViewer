@@ -12,6 +12,20 @@ import (
 	"github.com/sriannamalai/markdownviewer/theme"
 )
 
+// errWriter wraps an io.Writer and tracks the first write error,
+// no-opping subsequent writes after an error occurs.
+type errWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (ew *errWriter) write(s string) {
+	if ew.err != nil {
+		return
+	}
+	_, ew.err = io.WriteString(ew.w, s)
+}
+
 var validCustomPropertyRe = regexp.MustCompile(`^--[a-zA-Z0-9_-]+$`)
 
 // usesFeatures reports whether doc contains any diagram or math nodes, so
@@ -80,21 +94,23 @@ func renderPage(w io.Writer, doc *document.Document, opts Options) error {
 		return err
 	}
 	mermaidUsed, mathUsed := usesFeatures(doc)
-	fmt.Fprint(w, "<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n")
-	fmt.Fprint(w, "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<style>\n")
+
+	ew := &errWriter{w: w}
+	ew.write("<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n")
+	ew.write("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<style>\n")
 	if opts.ThemeName == "dark" {
 		darkChroma, err := chromaCSS(theme.Dark().ChromaStyle)
 		if err != nil {
 			return err
 		}
-		fmt.Fprint(w, theme.Dark().CSS(":root")+"\n"+darkChroma)
+		ew.write(theme.Dark().CSS(":root") + "\n" + darkChroma)
 		if overrides := emitThemeOverrides(opts.ThemeOverrides); overrides != "" {
-			fmt.Fprint(w, "\n"+overrides)
+			ew.write("\n" + overrides)
 		}
 	} else {
-		fmt.Fprint(w, th.CSS(":root")+"\n"+lightChroma)
+		ew.write(th.CSS(":root") + "\n" + lightChroma)
 		if overrides := emitThemeOverrides(opts.ThemeOverrides); overrides != "" {
-			fmt.Fprint(w, "\n"+overrides)
+			ew.write("\n" + overrides)
 		}
 	}
 	if opts.ThemeName == "auto" || opts.ThemeName == "" {
@@ -102,21 +118,24 @@ func renderPage(w io.Writer, doc *document.Document, opts Options) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprint(w, "\n@media (prefers-color-scheme: dark){\n"+theme.Dark().CSS(":root")+"\n"+darkChroma)
+		ew.write("\n@media (prefers-color-scheme: dark){\n" + theme.Dark().CSS(":root") + "\n" + darkChroma)
 		if overrides := emitThemeOverrides(opts.ThemeOverrides); overrides != "" {
-			fmt.Fprint(w, "\n"+overrides)
+			ew.write("\n" + overrides)
 		}
-		fmt.Fprint(w, "}\n")
+		ew.write("}\n")
 	}
 	if opts.Stylesheet != "" {
-		fmt.Fprint(w, sanitizeCSS(opts.Stylesheet))
+		ew.write(sanitizeCSS(opts.Stylesheet))
 	} else {
-		fmt.Fprint(w, theme.BaseCSS())
+		ew.write(theme.BaseCSS())
 	}
 	if mathUsed && opts.Math {
-		fmt.Fprint(w, assets.KatexCSS())
+		ew.write(assets.KatexCSS())
 	}
-	fmt.Fprint(w, "</style>\n</head>\n<body class=\"markdown-body\">\n")
+	ew.write("</style>\n</head>\n<body class=\"markdown-body\">\n")
+	if ew.err != nil {
+		return ew.err
+	}
 	if err := renderFragment(w, doc, opts); err != nil {
 		return err
 	}
@@ -125,14 +144,20 @@ func renderPage(w io.Writer, doc *document.Document, opts Options) error {
 		if opts.ThemeName == "dark" {
 			mtheme = "dark"
 		}
-		fmt.Fprint(w, "<script>"+assets.MermaidJS()+"</script>\n")
-		fmt.Fprintf(w, "<script>mermaid.initialize({startOnLoad:true,theme:%q});</script>\n", mtheme)
+		ew.write("<script>" + assets.MermaidJS() + "</script>\n")
+		if ew.err != nil {
+			return ew.err
+		}
+		_, ew.err = fmt.Fprintf(w, "<script>mermaid.initialize({startOnLoad:true,theme:%q});</script>\n", mtheme)
+		if ew.err != nil {
+			return ew.err
+		}
 	}
 	if mathUsed && opts.Math {
-		fmt.Fprint(w, "<script>"+assets.KatexJS()+"</script>\n")
-		fmt.Fprint(w, "<script>document.querySelectorAll('.math').forEach(function(el){"+
+		ew.write("<script>" + assets.KatexJS() + "</script>\n")
+		ew.write("<script>document.querySelectorAll('.math').forEach(function(el){" +
 			"katex.render(el.textContent,el,{displayMode:el.classList.contains('math-display'),throwOnError:false});});</script>\n")
 	}
-	fmt.Fprint(w, "</body>\n</html>\n")
-	return nil
+	ew.write("</body>\n</html>\n")
+	return ew.err
 }
