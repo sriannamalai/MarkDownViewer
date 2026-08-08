@@ -11,6 +11,8 @@ import (
 	"github.com/sriannamalai/markdownviewer/document"
 )
 
+// Render writes doc to w as HTML per opts, either a full page (the default)
+// or a body-only fragment (Options.Fragment).
 func Render(w io.Writer, doc *document.Document, opts Options) error {
 	if opts.Fragment {
 		return renderFragment(w, doc, opts)
@@ -69,7 +71,12 @@ func esc(s string) string {
 	return b.String()
 }
 
-// href returns an escaped attribute value ("" if blocked).
+// href resolves dest to an escaped attribute value. The second return value
+// reports whether the href/src attribute should be emitted at all: false
+// means the destination was blocked by policy, which is a different outcome
+// from an empty-but-allowed destination (e.g. "[foo]: <>", CommonMark spec
+// example 200) — the former omits the attribute entirely, the latter emits
+// `href=""`. Callers must not conflate the two by testing the string alone.
 //
 // A Resolver's ok=true result is trusted per its documented contract
 // (Options.Resolver): the host controls resolution, so its URL is emitted
@@ -78,12 +85,6 @@ func esc(s string) string {
 // default resolution path (wikilink targets get ".md" appended; other
 // destinations pass through unchanged) and is filtered by safeURL exactly
 // as before.
-// href resolves dest to an escaped attribute value. The second return value
-// reports whether the href/src attribute should be emitted at all: false
-// means the destination was blocked by policy, which is a different outcome
-// from an empty-but-allowed destination (e.g. "[foo]: <>", CommonMark spec
-// example 200) — the former omits the attribute entirely, the latter emits
-// `href=""`. Callers must not conflate the two by testing the string alone.
 func (r *writer) href(kind ResolveKind, dest string) (string, bool) {
 	if r.opts.Resolver != nil {
 		if u, ok := r.opts.Resolver(kind, dest); ok {
@@ -136,8 +137,12 @@ func (r *writer) block(n document.Node, tight bool) {
 		r.blocks(n, false)
 		r.raw("</blockquote>\n")
 	case *document.Admonition:
-		title := strings.ToUpper(n.Variant[:1]) + n.Variant[1:]
-		r.raw(`<div class="admonition admonition-` + n.Variant + "\">\n")
+		variant := n.Variant
+		if variant == "" {
+			variant = "note"
+		}
+		title := strings.ToUpper(variant[:1]) + variant[1:]
+		r.raw(`<div class="admonition admonition-` + esc(variant) + "\">\n")
 		r.raw(`<p class="admonition-title">` + title + "</p>\n")
 		r.blocks(n, false)
 		r.raw("</div>\n")
@@ -151,7 +156,15 @@ func (r *writer) block(n document.Node, tight bool) {
 		}
 		r.raw("<" + tag + attrs + ">\n")
 		for _, li := range n.Children() {
-			r.listItem(li.(*document.ListItem), n.Tight)
+			if item, ok := li.(*document.ListItem); ok {
+				r.listItem(item, n.Tight)
+			} else {
+				// A List should only ever contain ListItem children; a
+				// hand-built document that violates this renders the
+				// stray node through the normal block path rather than
+				// panicking on the type assertion.
+				r.block(li, false)
+			}
 		}
 		r.raw("</" + tag + ">\n")
 	case *document.CodeBlock:
@@ -297,7 +310,13 @@ func (r *writer) table(t *document.Table) {
 	r.raw("<table>\n")
 	rows := t.Children()
 	for ri, rowNode := range rows {
-		row := rowNode.(*document.TableRow)
+		row, ok := rowNode.(*document.TableRow)
+		if !ok {
+			// A Table should only ever contain TableRow children; a
+			// hand-built document that violates this drops the stray
+			// node rather than panicking on the type assertion.
+			continue
+		}
 		if row.Header {
 			r.raw("<thead>\n")
 		} else if ri == 1 {
@@ -308,7 +327,13 @@ func (r *writer) table(t *document.Table) {
 		if row.Header {
 			tag = "th"
 		}
-		for ci, cell := range row.Children() {
+		for ci, cellNode := range row.Children() {
+			cell, ok := cellNode.(*document.TableCell)
+			if !ok {
+				// Likewise for TableRow's children: skip anything that
+				// isn't a TableCell instead of asserting.
+				continue
+			}
 			attr := ""
 			if ci < len(t.Alignments) {
 				attr = alignAttr[t.Alignments[ci]]

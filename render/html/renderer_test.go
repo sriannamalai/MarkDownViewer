@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sriannamalai/markdownviewer/document"
 	"github.com/sriannamalai/markdownviewer/parser"
 )
 
@@ -119,5 +120,82 @@ func TestTaskListCheckboxes(t *testing.T) {
 	got := render(t, "- [x] done\n", nil)
 	if !strings.Contains(got, `<input type="checkbox" checked disabled />`) {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// renderHandBuiltDoc renders a hand-built *document.Document directly, bypassing the
+// parser entirely — for exercising Render's defensive handling of
+// host-constructed trees that don't match the shapes the parser produces.
+func renderHandBuiltDoc(t *testing.T, doc *document.Document) string {
+	t.Helper()
+	opts := DefaultOptions()
+	opts.Fragment = true
+	opts.Highlight = false
+	var buf bytes.Buffer
+	if err := Render(&buf, doc, opts); err != nil {
+		t.Fatal(err)
+	}
+	return buf.String()
+}
+
+func TestRenderAdmonitionEmptyVariantDoesNotPanic(t *testing.T) {
+	doc := &document.Document{}
+	adm := &document.Admonition{} // Variant left unset
+	p := &document.Paragraph{}
+	p.AppendChild(&document.Text{Value: "hello"})
+	adm.AppendChild(p)
+	doc.AppendChild(adm)
+
+	got := renderHandBuiltDoc(t, doc)
+	want := "<div class=\"admonition admonition-note\">\n<p class=\"admonition-title\">Note</p>\n<p>hello</p>\n</div>\n"
+	if got != want {
+		t.Fatalf("\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestRenderListWithNonListItemChildDoesNotPanic(t *testing.T) {
+	doc := &document.Document{}
+	list := &document.List{}
+	p := &document.Paragraph{}
+	p.AppendChild(&document.Text{Value: "stray"})
+	list.AppendChild(p) // not a *document.ListItem
+	doc.AppendChild(list)
+
+	got := renderHandBuiltDoc(t, doc)
+	want := "<ul>\n<p>stray</p>\n</ul>\n"
+	if got != want {
+		t.Fatalf("\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestRenderTableWithNonRowChildDoesNotPanic(t *testing.T) {
+	doc := &document.Document{}
+	tbl := &document.Table{}
+	p := &document.Paragraph{}
+	p.AppendChild(&document.Text{Value: "stray"})
+	tbl.AppendChild(p) // not a *document.TableRow
+	doc.AppendChild(tbl)
+
+	got := renderHandBuiltDoc(t, doc)
+	want := "<table>\n</table>\n"
+	if got != want {
+		t.Fatalf("\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestRenderTableRowWithNonCellChildDoesNotPanic(t *testing.T) {
+	doc := &document.Document{}
+	tbl := &document.Table{}
+	row := &document.TableRow{}
+	p := &document.Paragraph{}
+	p.AppendChild(&document.Text{Value: "stray"})
+	row.AppendChild(p) // not a *document.TableCell
+	tbl.AppendChild(row)
+	doc.AppendChild(tbl)
+
+	got := renderHandBuiltDoc(t, doc)
+	want := "<table>\n<tr>\n</tr>\n</table>\n"
+	if got != want {
+		t.Fatalf("\n got %q\nwant %q", got, want)
 	}
 }
