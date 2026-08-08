@@ -7,7 +7,7 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
-## [Unreleased]
+## [0.2.0] - 2026-08-08
 
 ### Added
 
