@@ -33,6 +33,17 @@ func TestRunOutputFileNonexistentDir(t *testing.T) {
 	}
 }
 
+func TestRunExtraArgsAfterFile(t *testing.T) {
+	var out bytes.Buffer
+	err := run([]string{"README.md", "-o", "readme.html"}, strings.NewReader(""), &out)
+	if err == nil {
+		t.Fatal("expected error for arguments after the file argument")
+	}
+	if !strings.Contains(err.Error(), "unexpected arguments after README.md") {
+		t.Fatalf("got %q", err)
+	}
+}
+
 func TestRunBadThemeWithOutput(t *testing.T) {
 	f, err := os.CreateTemp("", "mdview-test-*.html")
 	if err != nil {

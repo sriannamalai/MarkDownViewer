@@ -1,6 +1,6 @@
 // Command mdview renders Markdown to self-contained HTML.
 //
-//	mdview README.md -o readme.html
+//	mdview -o readme.html README.md
 //	cat notes.md | mdview -theme dark > notes.html
 package main
 
@@ -31,6 +31,9 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	noHighlight := fs.Bool("no-highlight", false, "disable syntax highlighting")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if fs.NArg() > 1 {
+		return fmt.Errorf("unexpected arguments after %s (flags must come before the file argument)", fs.Arg(0))
 	}
 
 	var src []byte
