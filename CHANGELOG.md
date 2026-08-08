@@ -7,6 +7,17 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [0.1.1] - 2026-08-08
+
+Test-infrastructure follow-up to 0.1.0; no library code changes.
+
+### Fixed
+
+- `.gitattributes` now forces LF checkouts so the byte-exact golden-file
+  tests pass on Windows checkouts with `core.autocrlf=true`.
+- The deeply-nested-list hang-detector test uses a smaller depth and a much
+  wider watchdog so it cannot flake on slow CI runners.
+
 ## [0.1.0] - 2026-08-08
 
 Initial release.
