@@ -48,7 +48,7 @@ Two stages, one boundary in between:
 
 | Package | Role |
 | --- | --- |
-| `markdownviewer` (root) | Public facade: `Parse`, `Render`, `RenderTo`, functional `Option`s. What most callers import. |
+| `markdownviewer` (root) | Public facade: `Parse`/`ParseWith`, `Render`/`RenderTo`, `RenderDoc`/`RenderDocTo`, `ParseContext`/`RenderContext`/`RenderDocContext`, functional `Option`s. What most callers import. |
 | `document` | The AST: `Node` interface, concrete node types (`Heading`, `List`, `Link`, …), `Walk`, `PlainText`, `Dump` (debug printer). Zero non-stdlib imports. |
 | `parser` | Markdown → `document.Document`. Wraps goldmark; owns the goldmark→document tree transform, heading-slug generation, and the math/admonition extensions. `Config` toggles individual syntax extensions. |
 | `render/html` | `document.Document` → HTML. Sanitization (bluemonday), URL policy, page assembly, chroma syntax highlighting, resolver hook. |
@@ -68,6 +68,88 @@ lint rule — a future CI check that fails on a goldmark import outside
 needs to understand `document` types, and swapping the underlying Markdown
 engine would in principle only touch `parser`.
 
+## Document model
+
+Every `document.Node` carries a `Kind`, a fixed-width enum (`KindDocument`
+through `KindFootnoteRef`, currently 0-31). Values are pinned and
+append-only by convention — a serialization/FFI compatibility contract,
+documented on the `const` block itself: existing values are never
+renumbered, new node types only ever append. `Kind.String()` and
+`document.KindFromString` map each value to a stable lowerCamel wire name
+(`"blockQuote"`, `"codeBlock"`, …) independent of the Go identifier.
+
+**Source spans.** `document.Span` (`StartLine`/`EndLine`, 1-based, plus
+`StartOffset`/`EndOffset`, 0-based half-open byte offsets) locates a node in
+the source it was parsed from; the zero `Span` means "position unknown".
+Coverage in v0.2 is block-level only — inline nodes carry no span. Leaf
+blocks (headings, paragraphs, code blocks, thematic breaks, …) get an exact
+span from goldmark's own line info, inclusive of block markers (`#`,
+` ``` `, blockquote `>`); container blocks (block quotes, lists, list
+items, tables, definition lists) get the union of their direct children's
+non-zero spans instead of their own markers. One node currently has no span
+at all: `ThematicBreak` is a single-token leaf with no `Lines()` data from
+goldmark to derive one from, so its `Span()` is always the zero value —
+hosts that need `<hr>` positions must fall back to surrounding-node spans.
+Offsets are relative to the source *after* parsing's up-front
+normalization: a leading UTF-8 BOM is stripped and any invalid UTF-8 byte
+sequences are replaced with U+FFFD before goldmark ever sees the bytes, so
+offset 0 is always the first byte of the normalized (not necessarily the
+original) input.
+
+**JSON codec.** `document.MarshalJSON`/`UnmarshalJSON` round-trip a
+`*Document` through a versioned wire format: a top-level envelope
+(`{"version":1,"kind":"document",...}`), each node as
+`{"kind":"<wire name>",...}` with lowerCamel field names, zero spans and
+empty children arrays omitted to keep output compact. `Kind` travels as its
+string name (not the numeric value) so the format stays readable and
+resilient to Go-side renumbering that can never happen anyway. `Document.Meta`
+(decoded front matter) must be JSON-marshalable as-is — it round-trips
+JSON-native, so a YAML timestamp becomes an RFC 3339 string rather than a
+Go `time.Time`. Invalid UTF-8 in the source is sanitized (replaced with
+U+FFFD) before the parser ever builds node text, which is what keeps every
+`Text`/`CodeSpan`/`HTMLBlock`/… string field already valid UTF-8 by the
+time it reaches `encoding/json` — the codec never has to silently mangle a
+string the way `json.Marshal` does for invalid UTF-8 on its own.
+
+## Facade
+
+The root `markdownviewer` package exposes two independent axes: parse vs.
+render, and source-driven vs. already-parsed-tree-driven.
+
+- **`Parse`/`ParseWith`** — Markdown bytes to `*document.Document`.
+  `ParseWith` takes an explicit `parser.Config`; `Parse` uses
+  `parser.Default()` (every extension on).
+- **`Render`/`RenderTo`** — parse-then-render in one call, the common case.
+  `WithParserConfig(cfg)` selects the `parser.Config` these two use
+  internally (no effect on the `RenderDoc*` family below, which never
+  parses).
+- **`RenderDoc`/`RenderDocTo`** — render an already-parsed
+  `*document.Document`, skipping re-parsing entirely. This is the
+  parse-once/render-many path: parse a document once, then call `RenderDoc`
+  repeatedly with different options (e.g. `WithTheme("dark")` vs.
+  `WithTheme("light")`) without re-running the parser each time.
+- **`WithSourceMap`** — opts `Render`/`RenderTo`/`RenderDoc`/`RenderDocTo`
+  into `data-md-line="<n>"` attributes on top-level block elements (and
+  footnote `<li>`s), sourced from each node's `Span.StartLine`. Two kinds
+  of output are deliberately left unannotated because the renderer doesn't
+  own the markup it emits for them: raw HTML blocks (the source markup
+  passes through as-is) and chroma-highlighted code blocks (chroma emits
+  its own `<pre>`/`<span>` structure). Off by default; the attribute exists
+  to let a live-preview host scroll-sync its editor cursor to the rendered
+  DOM node it produced.
+- **`ParseContext`/`RenderContext`/`RenderDocContext`** — context-aware
+  variants of the three families above. They honor `ctx`'s deadline: if
+  `ctx` ends first, the call returns `ctx.Err()` promptly. What they do
+  *not* do is reclaim the abandoned work — the underlying goroutine keeps
+  running to completion (the Markdown engine has no cancellation hooks),
+  and it may still be reading `src` (or `doc`, for `RenderDocContext`) for
+  an unbounded window after the call returns. This bounds caller-observed
+  latency, not CPU spend; callers must treat `src`/`doc` as immutable for
+  the lifetime of the call and must not assume the goroutine has stopped
+  just because the call returned. See the root package godoc's Concurrency
+  section and `SECURITY.md` for the full contract and the resource-
+  exhaustion background this is meant to help hosts work around.
+
 ## Feature set
 
 CommonMark (via goldmark) plus: GFM tables, strikethrough, task lists,
@@ -77,8 +159,9 @@ matter; `:emoji:` shortcodes; `[[wiki-links]]`; inline/display TeX math
 (`> [!NOTE]` etc.); mermaid diagrams (` ```mermaid ` fences); syntax
 highlighting for 250+ languages via chroma; deterministic, deduplicated
 heading anchor IDs. Every extension beyond plain CommonMark is individually
-toggleable via `parser.Config` (not yet exposed through the facade — see
-Roadmap).
+toggleable via `parser.Config`, reachable from the facade through
+`markdownviewer.WithParserConfig` (`Parse`/`ParseWith` also take a `Config`
+directly).
 
 ## Output contract
 
@@ -88,14 +171,16 @@ Roadmap).
   embedded `<style>` with the resolved theme + base CSS + (if the document
   uses them) KaTeX CSS, and inline `<script>` blocks for mermaid/KaTeX
   *only if* the document actually contains diagram/math nodes. Nothing is
-  fetched from a CDN — every asset is embedded at build time
-  (`internal/assets`, sourced by `scripts/fetch-assets.sh` and inlined by
+  fetched from a CDN — every asset is embedded at build time (the public
+  `assets` package, sourced by `scripts/fetch-assets.sh` and inlined by
   `scripts/inlinefonts`).
 - **A fragment** (`Fragment()` / `-fragment`): body-only markup, no
   `<html>`/`<head>`/`<style>`/`<script>` at all. The host owns the page.
   Diagram/math nodes still emit their markup (`<pre class="mermaid">`,
   `<span class="math ...">`) but render as inert placeholders — raw source
-  visible — until the host loads its own mermaid.js/KaTeX. See the
+  visible — until the host loads its own mermaid.js/KaTeX, which it can
+  source from the `assets` package (`assets.MermaidJS`, `assets.KatexJS`,
+  `assets.KatexCSS`) instead of vendoring separate copies. See the
   Concurrency/Fragment notes in the root package godoc and README.
 
 ## Theming
@@ -137,11 +222,15 @@ emission.
   breakout. This is not full CSS sanitization — both are host-supplied
   inputs, not untrusted Markdown content, so the trust boundary is the
   same as for a `Resolver`: the host controls what it passes in.
-- **Resource exhaustion is a known, documented gap, not a mitigated one.**
-  See SECURITY.md's "Resource exhaustion" section: deeply nested list input
-  can take goldmark's parser tens of seconds on a small input, and there is
-  currently no built-in timeout. Hosts handling untrusted input need to
-  apply their own wall-clock bound.
+- **Resource exhaustion is a known, documented gap, only partially
+  mitigated.** See SECURITY.md's "Resource exhaustion" section: deeply
+  nested list input can take goldmark's parser tens of seconds on a small
+  input, and goldmark itself has no built-in timeout. `ParseContext`/
+  `RenderContext`/`RenderDocContext` give hosts a bounded-latency escape
+  hatch — the call returns on `ctx` expiry instead of blocking until the
+  parse finishes — but they do not reclaim the abandoned goroutine's CPU,
+  so they bound caller latency, not total resource spend. Hosts handling
+  untrusted input still need their own capacity planning around that gap.
 
 ## Testing approach
 
@@ -172,38 +261,26 @@ emission.
 
 ## Roadmap
 
-Toward v1.0, roughly in order:
+v0.2 shipped the additive model work the earlier roadmap prioritized:
+block-level source spans, the versioned JSON codec with pinned `Kind`
+values, `parser.Config` reachable from the facade (`WithParserConfig`) plus
+the `RenderDoc`/`RenderDocTo` parse-once/render-many entry points, an
+exported `assets` package, and context-aware `Parse`/`Render`/`RenderDoc`
+variants. See the Document model and Facade sections above for what
+shipped, and `CHANGELOG.md` for the release notes.
 
-1. **Source positions on nodes.** `document` nodes currently carry no
-   source-location information. Adding it (offsets or line/column,
-   optionally behind a parse option to avoid paying for it when unused) is
-   the highest-priority addition — hosts doing live-preview scroll-sync or
-   inline diagnostics need it.
-2. **JSON serialization + pinned `Kind` values.** A `document.Document` →
-   JSON (and back) path, with `Kind` constants pinned to stable numeric or
-   string values suitable for a wire format, so non-Go consumers (a future
-   WASM/FFI host, a separate renderer process) can work from the same tree
-   without linking Go.
-3. **`parser.Config` exposed through the facade, plus a `RenderDoc`-style
-   entry point.** Today `parser.Config`'s per-extension toggles aren't
-   reachable from `markdownviewer`'s functional-option API, and there's no
-   facade function that takes an already-parsed `*document.Document`
-   straight to `Render` (skipping re-parsing). Both are straightforward;
-   neither has shipped yet.
-4. **Exported asset bundle for fragment hosts.** `internal/assets`
-   (mermaid.js, KaTeX JS/CSS) is currently unexported — a fragment host
-   that wants offline mermaid/KaTeX support has to source its own copies.
-   Exporting a stable accessor removes that duplication.
-5. **Context-aware `Parse`/`Render` variants.** Given the resource-exhaustion
-   gap documented in `SECURITY.md`, `context.Context`-accepting variants
-   that can be cancelled mid-parse/render would let hosts enforce a
-   deadline without the goroutine-plus-timer workaround described there.
-6. **C-shared FFI (`.so`/`.dylib`/`.dll`) + WASM builds**, once the model
-   above is stable enough to commit to a C ABI / JS boundary.
-7. **Mobile bindings** (`gomobile` / Flutter FFI) on top of the FFI layer.
-8. **A native render-tree renderer** — for toolkit-native (non-webview)
+Toward v1.0, what remains, roughly in order:
+
+1. **C-shared FFI (`.so`/`.dylib`/`.dll`) + WASM builds**, now that the
+   `document` model has a stable wire format (JSON, pinned `Kind` values)
+   to build a C ABI / JS boundary on top of.
+2. **Mobile bindings** (`gomobile` / Flutter FFI) on top of the FFI layer.
+3. **A native render-tree renderer** — for toolkit-native (non-webview)
    hosts, rendering directly from `document.Document` instead of through
    HTML.
+4. **Incremental rendering**, if profiling on real host workloads shows
+   full re-render (even with parse-once/`RenderDoc`) is the bottleneck —
+   not committed to; only worth doing if the numbers demand it.
 
 Every step above consumes (and, where relevant, extends) the same
 `document` model the HTML renderer uses today; none requires rearchitecting

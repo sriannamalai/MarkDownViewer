@@ -46,8 +46,8 @@ if a diff surprises you, treat it as a bug first.
 
 ## Upgrading vendored assets
 
-Mermaid and KaTeX are vendored (embedded via `go:embed` in
-`internal/assets/`) for fully offline, self-contained output. To bump a
+Mermaid and KaTeX are vendored (embedded via `go:embed` in the public
+`assets` package) for fully offline, self-contained output. To bump a
 pinned version, edit `MERMAID_VERSION` / `KATEX_VERSION` in
 `scripts/fetch-assets.sh`, then run:
 
@@ -57,7 +57,7 @@ pinned version, edit `MERMAID_VERSION` / `KATEX_VERSION` in
 
 This re-fetches the pinned files, re-inlines KaTeX fonts as `data:` URIs,
 and refreshes `third_party/*/LICENSE`. Commit the resulting
-`internal/assets/*` and `third_party/*/LICENSE` changes together, and update
+`assets/*` and `third_party/*/LICENSE` changes together, and update
 `third_party/README.md`'s version table.
 
 ## Developer Certificate of Origin (DCO)

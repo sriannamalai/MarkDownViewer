@@ -10,9 +10,10 @@ AST.
 ## Status
 
 **v0.x — the API is not yet frozen.** The `document` model is designed to
-become the stable contract for future renderers and bindings, but it hasn't
-earned that status yet: expect additive evolution (source positions on
-nodes, a JSON serialization) before a v1.0 that commits to compatibility.
+become the stable contract for future renderers and bindings; it now
+carries block-level source spans, pinned `Kind` values, and a versioned
+JSON codec, but hasn't earned frozen-API status yet — expect further
+additive evolution before a v1.0 that commits to compatibility.
 See [`docs/Design.md`](docs/Design.md) for the architecture and roadmap, and
 [`CHANGELOG.md`](CHANGELOG.md) for release notes.
 
@@ -35,6 +36,8 @@ See [`docs/Design.md`](docs/Design.md) for the architecture and roadmap, and
 | Safe by default | HTML sanitized via bluemonday, URL scheme allowlist, opt-in `AllowRawHTML()` escape hatch |
 | Host-controlled resolution | Pluggable `Resolver` for rewriting link/image/wiki-link targets |
 | Offline output | Every asset (KaTeX, mermaid, fonts) is embedded — rendered HTML has zero external dependencies |
+| Source map | Opt-in `data-md-line` attributes (`WithSourceMap()`) for editor↔preview scroll sync |
+| JSON document tree | `document.MarshalJSON`/`UnmarshalJSON` — versioned wire format with pinned `Kind` names |
 
 ## Install
 
@@ -109,6 +112,48 @@ as-is, without scheme filtering. The library assumes hosts fully control
 resolution and will not echo untrusted targets back unexamined — see
 `SECURITY.md`.
 
+### Editor integration
+
+Live-preview hosts (an editor pane rendering Markdown as you type) tend to
+need two things: a way to map rendered DOM back to source lines, and a way
+to avoid re-parsing on every keystroke or theme flip.
+
+**Scroll sync via `WithSourceMap()`.** Top-level block elements (and
+footnote `<li>`s) get a `data-md-line="<n>"` attribute pointing at the
+1-based source line the block started on:
+
+```go
+out, err := markdownviewer.Render(src, markdownviewer.WithSourceMap())
+```
+
+```html
+<h1 data-md-line="1">Title</h1>
+<p data-md-line="3">Some text.</p>
+```
+
+An editor can scroll the preview to the block whose `data-md-line` is
+closest to the cursor line, or do the reverse on click. Two kinds of output
+are deliberately left unannotated because the renderer doesn't own the
+markup it emits for them: raw HTML blocks, and chroma-highlighted code
+blocks (chroma emits its own `<pre>`/`<span>` structure).
+
+**Parse once, render many with `RenderDoc`.** Re-parsing on every theme
+switch is wasted work when the source hasn't changed — parse once with
+`Parse`, then render the same tree repeatedly with `RenderDoc`/`RenderDocTo`:
+
+```go
+doc, err := markdownviewer.Parse(src)
+if err != nil {
+	panic(err)
+}
+
+light, err := markdownviewer.RenderDoc(doc, markdownviewer.WithTheme("light"))
+dark, err := markdownviewer.RenderDoc(doc, markdownviewer.WithTheme("dark"))
+```
+
+`doc` must not be mutated while a `RenderDoc`/`RenderDocTo` call is reading
+it — see the Concurrency section below.
+
 ## CLI usage
 
 The `mdview` command renders a file or stdin to HTML. Flags come before the
@@ -127,15 +172,30 @@ Full flag list: `-o FILE` (default stdout), `-theme light|dark|auto`
 
 ## Concurrency
 
-All top-level functions (`Render`, `RenderTo`, `Parse`) are safe for
-concurrent use — they share no mutable state beyond two package-level
-values, constructed once and never mutated afterward: bluemonday's
-sanitizer `Policy` (documented safe to `Sanitize` concurrently once
-constructed) and chroma's HTML formatter (internally mutex-protected for
-concurrent `Format` calls). The one thing that isn't synchronized: a
-`*document.Document` returned by `Parse` must not be mutated while it's
-being read by a concurrent `Render`/`RenderTo` call, or by another
-mutation — `document.Document` has no internal locking of its own.
+All top-level functions (`Parse`, `ParseWith`, `Render`, `RenderTo`,
+`RenderDoc`, `RenderDocTo`, `ParseContext`, `RenderContext`,
+`RenderDocContext`) are safe for concurrent use — they share no mutable
+state beyond two package-level values, constructed once and never mutated
+afterward: bluemonday's sanitizer `Policy` (documented safe to `Sanitize`
+concurrently once constructed) and chroma's HTML formatter (internally
+mutex-protected for concurrent `Format` calls). The one thing that isn't
+synchronized: a `*document.Document` returned by `Parse`/`ParseWith` must
+not be mutated while it's being read by a concurrent
+`Render`/`RenderTo`/`RenderDoc`/`RenderDocTo` call, or by another mutation
+— `document.Document` has no internal locking of its own.
+
+The `Context` variants extend this contract rather than relaxing it: when
+`ctx` ends before the underlying work finishes, the function returns
+`ctx.Err()` immediately, but the abandoned goroutine may still be reading
+`src` (`ParseContext`/`RenderContext`) or `doc` (`RenderDocContext`) for an
+unbounded window afterward — there's no signal for when it actually stops.
+Getting `ctx.Err()` back is not a guarantee those inputs are safe to mutate
+or reuse; treat `src`/`doc` passed to a `Context` variant as immutable for
+the lifetime of the call, and don't assume that lifetime has ended just
+because the call returned. `ParseContext`/`RenderContext`/`RenderDocContext`
+bound caller-observed latency, not CPU spend — the Markdown engine has no
+cancellation hooks, so an abandoned parse/render keeps running to
+completion. See SECURITY.md for the resource-exhaustion background.
 
 ## Theming
 
@@ -197,12 +257,13 @@ in scope).
 
 ## Roadmap
 
-v0.1 ships the Go package API and the `mdview` CLI on today's `document`
-model, ahead of an eventual v1.0 that commits to API stability. See
-[`docs/Design.md`](docs/Design.md#roadmap) for the full roadmap — source
-positions on nodes, JSON serialization, an exported asset bundle for
-fragment hosts, context-aware parse/render, C-shared FFI + WASM builds,
-mobile bindings, and a native render-tree renderer, roughly in that order.
+v0.2 adds block-level source spans, a versioned JSON codec for the
+`document` tree, `RenderDoc`/`ParseWith`/`WithParserConfig`, an exported
+`assets` package, and context-aware parse/render variants on top of v0.1's
+Go package API and `mdview` CLI, ahead of an eventual v1.0 that commits to
+API stability. See [`docs/Design.md`](docs/Design.md#roadmap) for what
+remains — C-shared FFI + WASM builds, mobile bindings, a native
+render-tree renderer, and incremental rendering if profiling demands it.
 
 ## License
 

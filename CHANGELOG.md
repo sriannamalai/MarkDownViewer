@@ -9,6 +9,42 @@ model and renderer options.
 
 ## [Unreleased]
 
+### Added
+
+- **Block-level source spans.** `document.Span` locates block nodes in the
+  original Markdown source (1-based `StartLine`/`EndLine`, 0-based
+  half-open `StartOffset`/`EndOffset`). Leaf blocks get an exact span
+  including their markers; container blocks get the union of their
+  children's spans; `ThematicBreak` has no `Lines()` data to derive a span
+  from and so is always zero-span. Offsets are relative to the source after
+  BOM-stripping and invalid-UTF-8 sanitization.
+- **Opt-in HTML source map.** `htmlrender.Options.SourceMap` /
+  `markdownviewer.WithSourceMap()` annotate top-level block elements (and
+  footnote `<li>`s) with `data-md-line="<n>"` for editor↔preview scroll
+  sync. Raw HTML blocks and chroma-highlighted code blocks are skipped
+  (unowned markup).
+- **Versioned JSON codec.** `document.MarshalJSON`/`UnmarshalJSON` round-trip
+  a `*document.Document` through a stable, version-1 wire format: string
+  `Kind` names, lowerCamel fields, zero spans omitted. `Kind` values are now
+  pinned (0-31) and append-only, with `Kind.String()`/`document.KindFromString`
+  providing the stable wire-name mapping.
+- **`RenderDoc`/`RenderDocTo`, `ParseWith`, `WithParserConfig`.** Parse once
+  and render many times (e.g. theme switching) without re-parsing via
+  `RenderDoc`/`RenderDocTo`; parse with an explicit `parser.Config` via
+  `ParseWith`; and select that `Config` for `Render`/`RenderTo` via the new
+  `WithParserConfig` option.
+- **Public `assets` package.** The embedded mermaid.js and KaTeX JS/CSS
+  bundles used for full-page rendering are now exported
+  (`assets.MermaidJS`, `assets.KatexJS`, `assets.KatexCSS`) so fragment
+  hosts can activate offline diagram/math support without vendoring their
+  own copies.
+- **Context-aware parse/render variants.** `ParseContext`, `RenderContext`,
+  and `RenderDocContext` honor a `context.Context` deadline, returning
+  `ctx.Err()` promptly on expiry. The abandoned goroutine keeps running to
+  completion (the underlying Markdown engine has no cancellation hooks), so
+  these bound caller-observed latency, not CPU spend — see the root package
+  godoc's Concurrency section for the full abandonment contract.
+
 ### Fixed
 
 - `parser`: a document whose first line is `---` and that never has a

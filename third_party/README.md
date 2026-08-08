@@ -1,6 +1,6 @@
 # Third-party assets and dependencies
 
-## Vendored viewer assets (embedded in `internal/assets/`)
+## Vendored viewer assets (embedded in the public `assets` package)
 
 These are fetched offline by `scripts/fetch-assets.sh` and embedded via
 `go:embed` so rendered pages work with zero network access. KaTeX's fonts
@@ -37,5 +37,5 @@ each module's source for details.
 Run `./scripts/fetch-assets.sh` after bumping `MERMAID_VERSION` and/or
 `KATEX_VERSION` in that script. It re-fetches the pinned files from
 `cdn.jsdelivr.net`, re-inlines the KaTeX fonts, and refreshes the
-`third_party/*/LICENSE` files. Commit the resulting `internal/assets/*`
+`third_party/*/LICENSE` files. Commit the resulting `assets/*`
 and `third_party/*/LICENSE` changes together.

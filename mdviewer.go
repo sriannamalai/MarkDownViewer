@@ -106,9 +106,11 @@ func WithTheme(name string) Option {
 // Diagram and math nodes still render their markup (a <pre class="mermaid">
 // block, a <span>/<div class="math ...">), but as inert placeholders: with
 // no mermaid.js/KaTeX loaded, the raw diagram/math source is what a viewer
-// sees until the host provides those libraries itself. The embedded copies
-// this package bundles for full-page output are not currently exported for
-// fragment hosts to reuse (see docs/Design.md's Roadmap).
+// sees until the host provides those libraries itself. The same mermaid.js
+// and KaTeX JS/CSS this package embeds for full-page output are available
+// to fragment hosts via the assets package (assets.MermaidJS, assets.KatexJS,
+// assets.KatexCSS) — see README.md's Theming section for the injection
+// snippet.
 func Fragment() Option {
 	return func(c *config) { c.render.Fragment = true }
 }
