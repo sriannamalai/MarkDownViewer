@@ -67,8 +67,13 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
-		w = f
+		err = viewer.RenderTo(f, src, opts...)
+		f.Close()
+		if err != nil {
+			os.Remove(*out)
+			return err
+		}
+		return nil
 	}
 	return viewer.RenderTo(w, src, opts...)
 }
