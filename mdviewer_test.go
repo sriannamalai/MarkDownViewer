@@ -23,6 +23,16 @@ func TestFragmentOption(t *testing.T) {
 	}
 }
 
+func TestWithSourceMap(t *testing.T) {
+	out, err := Render([]byte("# Hi\n"), Fragment(), WithSourceMap())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `data-md-line="1"`) {
+		t.Fatalf("got %q", out)
+	}
+}
+
 func TestOptionStacking(t *testing.T) {
 	out, _ := Render([]byte("<script>x</script>\n\n$a$\n"), Fragment(), AllowRawHTML(), DisableMath())
 	s := string(out)

@@ -124,6 +124,11 @@ func WithThemeOverrides(vars map[string]string) Option {
 	return func(c *config) { c.render.ThemeOverrides = vars }
 }
 
+// WithSourceMap annotates top-level block elements with data-md-line attributes for editor↔preview scroll synchronization.
+func WithSourceMap() Option {
+	return func(c *config) { c.render.SourceMap = true }
+}
+
 // WithStylesheet replaces the base stylesheet entirely with the provided CSS.
 // When non-empty, it overrides theme.BaseCSS() and takes precedence over
 // theme-based styling. Content is emitted into the page's <style> element;

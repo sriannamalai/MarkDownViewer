@@ -24,6 +24,13 @@ func renderFragment(w io.Writer, doc *document.Document, opts Options) error {
 	bw := bufio.NewWriter(w)
 	r := &writer{w: bw, opts: opts}
 	for _, c := range doc.Children() {
+		if opts.SourceMap {
+			if sp, ok := c.(interface{ Span() document.Span }); ok {
+				if s := sp.Span(); !s.IsZero() {
+					r.lineAttr = fmt.Sprintf(` data-md-line="%d"`, s.StartLine)
+				}
+			}
+		}
 		r.block(c, false)
 	}
 	r.footnotes(doc)
@@ -34,9 +41,10 @@ func renderFragment(w io.Writer, doc *document.Document, opts Options) error {
 }
 
 type writer struct {
-	w    *bufio.Writer
-	opts Options
-	err  error
+	w        *bufio.Writer
+	opts     Options
+	err      error
+	lineAttr string
 }
 
 func (r *writer) raw(s string) {
@@ -114,13 +122,15 @@ func (r *writer) href(kind ResolveKind, dest string) (string, bool) {
 }
 
 func (r *writer) block(n document.Node, tight bool) {
+	attr := r.lineAttr
+	r.lineAttr = ""
 	switch n := n.(type) {
 	case *document.Heading:
 		tag := fmt.Sprintf("h%d", n.Level)
 		if r.opts.HeadingAnchors && n.AnchorID != "" {
-			r.raw("<" + tag + ` id="` + esc(n.AnchorID) + `">`)
+			r.raw("<" + tag + attr + ` id="` + esc(n.AnchorID) + `">`)
 		} else {
-			r.raw("<" + tag + ">")
+			r.raw("<" + tag + attr + ">")
 		}
 		r.inlines(n)
 		r.raw("</" + tag + ">\n")
@@ -129,11 +139,11 @@ func (r *writer) block(n document.Node, tight bool) {
 			r.inlines(n)
 			return
 		}
-		r.raw("<p>")
+		r.raw("<p" + attr + ">")
 		r.inlines(n)
 		r.raw("</p>\n")
 	case *document.BlockQuote:
-		r.raw("<blockquote>\n")
+		r.raw("<blockquote" + attr + ">\n")
 		r.blocks(n, false)
 		r.raw("</blockquote>\n")
 	case *document.Admonition:
@@ -142,7 +152,7 @@ func (r *writer) block(n document.Node, tight bool) {
 			variant = "note"
 		}
 		title := strings.ToUpper(variant[:1]) + variant[1:]
-		r.raw(`<div class="admonition admonition-` + esc(variant) + "\">\n")
+		r.raw(`<div` + attr + ` class="admonition admonition-` + esc(variant) + "\">\n")
 		r.raw(`<p class="admonition-title">` + title + "</p>\n")
 		r.blocks(n, false)
 		r.raw("</div>\n")
@@ -154,7 +164,7 @@ func (r *writer) block(n document.Node, tight bool) {
 				attrs = fmt.Sprintf(` start="%d"`, n.Start)
 			}
 		}
-		r.raw("<" + tag + attrs + ">\n")
+		r.raw("<" + tag + attr + attrs + ">\n")
 		for _, li := range n.Children() {
 			if item, ok := li.(*document.ListItem); ok {
 				r.listItem(item, n.Tight)
@@ -168,27 +178,27 @@ func (r *writer) block(n document.Node, tight bool) {
 		}
 		r.raw("</" + tag + ">\n")
 	case *document.CodeBlock:
-		r.codeBlock(n)
+		r.codeBlock(n, attr)
 	case *document.Diagram:
 		if r.opts.Mermaid && n.Engine == "mermaid" {
-			r.raw(`<pre class="mermaid">` + esc(n.Source) + "</pre>\n")
+			r.raw(`<pre` + attr + ` class="mermaid">` + esc(n.Source) + "</pre>\n")
 		} else {
-			r.codeBlock(&document.CodeBlock{Language: n.Engine, Code: n.Source})
+			r.codeBlock(&document.CodeBlock{Language: n.Engine, Code: n.Source}, attr)
 		}
 	case *document.MathBlock:
 		if r.opts.Math {
-			r.raw(`<div class="math math-display">` + esc(n.Source) + "</div>\n")
+			r.raw(`<div` + attr + ` class="math math-display">` + esc(n.Source) + "</div>\n")
 		} else {
-			r.codeBlock(&document.CodeBlock{Language: "math", Code: n.Source})
+			r.codeBlock(&document.CodeBlock{Language: "math", Code: n.Source}, attr)
 		}
 	case *document.Table:
-		r.table(n)
+		r.table(n, attr)
 	case *document.ThematicBreak:
-		r.raw("<hr />\n")
+		r.raw("<hr" + attr + " />\n")
 	case *document.HTMLBlock:
 		r.rawHTML(n.HTML, true)
 	case *document.DefinitionList:
-		r.raw("<dl>\n")
+		r.raw("<dl" + attr + ">\n")
 		for _, c := range n.Children() {
 			switch c := c.(type) {
 			case *document.DefinitionTerm:
@@ -281,10 +291,12 @@ func (r *writer) checkbox(checked bool) {
 	}
 }
 
-func (r *writer) codeBlock(n *document.CodeBlock) {
+func (r *writer) codeBlock(n *document.CodeBlock, attr string) {
 	if r.opts.Highlight {
 		var b strings.Builder
 		if highlight(&b, n.Code, n.Language) {
+			// Chroma-highlighted output is unowned markup (its own <pre>/
+			// <span> structure) — no data-md-line attribute is threaded in.
 			r.raw(b.String())
 			if !strings.HasSuffix(b.String(), "\n") {
 				r.raw("\n")
@@ -296,7 +308,7 @@ func (r *writer) codeBlock(n *document.CodeBlock) {
 	if n.Language != "" {
 		cls = ` class="language-` + esc(n.Language) + `"`
 	}
-	r.raw("<pre><code" + cls + ">")
+	r.raw("<pre" + attr + "><code" + cls + ">")
 	r.text(n.Code)
 	r.raw("</code></pre>\n")
 }
@@ -306,8 +318,8 @@ var alignAttr = map[document.Alignment]string{
 	document.AlignRight: ` align="right"`,
 }
 
-func (r *writer) table(t *document.Table) {
-	r.raw("<table>\n")
+func (r *writer) table(t *document.Table, attr string) {
+	r.raw("<table" + attr + ">\n")
 	rows := t.Children()
 	for ri, rowNode := range rows {
 		row, ok := rowNode.(*document.TableRow)
@@ -359,7 +371,13 @@ func (r *writer) footnotes(doc *document.Document) {
 	}
 	r.raw("<section class=\"footnotes\">\n<ol>\n")
 	for _, def := range doc.Footnotes {
-		r.raw(fmt.Sprintf(`<li id="fn:%d">`+"\n", def.Index))
+		attr := ""
+		if r.opts.SourceMap {
+			if s := def.Span(); !s.IsZero() {
+				attr = fmt.Sprintf(` data-md-line="%d"`, s.StartLine)
+			}
+		}
+		r.raw(fmt.Sprintf(`<li id="fn:%d"%s>`+"\n", def.Index, attr))
 		r.blocks(def, false)
 		r.raw(fmt.Sprintf(`<a href="#fnref:%d" class="footnote-backref">↩</a>`+"\n</li>\n", def.Index))
 	}
