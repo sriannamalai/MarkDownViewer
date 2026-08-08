@@ -93,3 +93,40 @@ func TestFragmentModeIgnoresCSS(t *testing.T) {
 		t.Error("fragment mode should not include theme overrides")
 	}
 }
+
+func TestStylesheetBreakoutPrevention(t *testing.T) {
+	injected := "</style><script>alert(1)</script>"
+	got := render(t, "# Hi\n", func(o *Options) {
+		o.Fragment = false
+		o.Stylesheet = injected
+	})
+	// Verify exactly one </style> (the real one)
+	if strings.Count(got, "</style>") != 1 {
+		t.Error("page should contain exactly one </style> closing tag")
+	}
+	// Verify the breakout sequence is removed
+	if strings.Contains(got, "</style><script>alert") {
+		t.Error("style-element breakout sequence should not be present")
+	}
+}
+
+func TestThemeOverridesBreakoutPrevention(t *testing.T) {
+	injected := "red}</style><script>x"
+	got := render(t, "# Hi\n", func(o *Options) {
+		o.Fragment = false
+		o.ThemeName = "light"
+		o.ThemeOverrides = map[string]string{"--md-fg": injected}
+	})
+	// Verify exactly one </style> (the real one)
+	if strings.Count(got, "</style>") != 1 {
+		t.Error("page should contain exactly one </style> closing tag")
+	}
+	// Verify the breakout sequence is removed
+	if strings.Contains(got, "</style><script>") {
+		t.Error("style-element breakout sequence should not be present")
+	}
+	// Verify override value has breakout sequence removed but CSS value preserved
+	if !strings.Contains(got, "--md-fg:red") {
+		t.Error("override value base should be preserved")
+	}
+}

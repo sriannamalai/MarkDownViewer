@@ -82,14 +82,16 @@ func WithResolver(r Resolver) Option {
 // WithThemeOverrides applies CSS custom-property overrides to the rendered theme.
 // Keys should be property names (e.g., "--md-bg"), values the CSS values.
 // Overrides are emitted after the base theme in sorted key order, ensuring
-// they win in both light and dark variants.
+// they win in both light and dark variants. Content is emitted into the page's
+// <style> element; </style sequences are stripped defensively.
 func WithThemeOverrides(vars map[string]string) Option {
 	return func(c *config) { c.render.ThemeOverrides = vars }
 }
 
 // WithStylesheet replaces the base stylesheet entirely with the provided CSS.
 // When non-empty, it overrides theme.BaseCSS() and takes precedence over
-// theme-based styling.
+// theme-based styling. Content is emitted into the page's <style> element;
+// </style sequences are stripped defensively.
 func WithStylesheet(css string) Option {
 	return func(c *config) { c.render.Stylesheet = css }
 }

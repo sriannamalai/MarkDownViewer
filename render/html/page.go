@@ -29,6 +29,18 @@ func usesFeatures(doc *document.Document) (mermaid, math bool) {
 	return mermaid, math
 }
 
+// sanitizeCSS removes </style sequences case-insensitively from host-supplied CSS
+// to prevent breakout from the page's style element.
+func sanitizeCSS(s string) string {
+	lower := strings.ToLower(s)
+	for strings.Contains(lower, "</style") {
+		i := strings.Index(lower, "</style")
+		s = s[:i] + s[i+7:]
+		lower = strings.ToLower(s)
+	}
+	return s
+}
+
 // emitThemeOverrides emits CSS custom-property overrides in sorted key order.
 func emitThemeOverrides(overrides map[string]string) string {
 	if len(overrides) == 0 {
@@ -42,7 +54,8 @@ func emitThemeOverrides(overrides map[string]string) string {
 	var b strings.Builder
 	b.WriteString(":root{")
 	for _, k := range keys {
-		b.WriteString(k + ":" + overrides[k] + ";")
+		sanitized := sanitizeCSS(overrides[k])
+		b.WriteString(k + ":" + sanitized + ";")
 	}
 	b.WriteString("}")
 	return b.String()
@@ -87,7 +100,7 @@ func renderPage(w io.Writer, doc *document.Document, opts Options) error {
 		fmt.Fprint(w, "}\n")
 	}
 	if opts.Stylesheet != "" {
-		fmt.Fprint(w, opts.Stylesheet)
+		fmt.Fprint(w, sanitizeCSS(opts.Stylesheet))
 	} else {
 		fmt.Fprint(w, theme.BaseCSS())
 	}
