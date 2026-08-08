@@ -2,10 +2,19 @@
 
 A modern, embeddable Markdown viewer library for Go. Feed it Markdown, get
 back self-contained, themed, sanitized HTML — no CDN calls, no external
-assets, safe to render untrusted input by default. Built around a stable,
-versioned document model that sits between parsing and rendering, so the
-HTML renderer shipped today and native renderers planned for later both
-consume the same typed AST.
+assets, safe to render untrusted input by default. Built around a document
+model that sits between parsing and rendering, so the HTML renderer shipped
+today and native renderers planned for later both consume the same typed
+AST.
+
+## Status
+
+**v0.x — the API is not yet frozen.** The `document` model is designed to
+become the stable contract for future renderers and bindings, but it hasn't
+earned that status yet: expect additive evolution (source positions on
+nodes, a JSON serialization) before a v1.0 that commits to compatibility.
+See [`docs/Design.md`](docs/Design.md) for the architecture and roadmap, and
+[`CHANGELOG.md`](CHANGELOG.md) for release notes.
 
 ## Features
 
@@ -75,8 +84,9 @@ doc, err := markdownviewer.Parse(src)
 ```
 
 `document.Document` and its node types are documented in the `document`
-package and are the stable contract: renderers only ever depend on it, never
-on parser internals.
+package and are the intended long-term contract: renderers only ever depend
+on it, never on parser internals. It is not API-frozen yet — see Status
+above and the roadmap in [`docs/Design.md`](docs/Design.md).
 
 ### Rewriting links and images
 
@@ -157,18 +167,12 @@ in scope).
 
 ## Roadmap
 
-v1 ships the Go package API and the `mdview` CLI, both built on the frozen
-`document` model. Planned, not yet built:
-
-1. **v1.x** — C-shared FFI builds (`.so` / `.dylib` / `.dll`) with a small
-   stable C API, plus a WASM build for browser-side hosts.
-2. **Mobile bindings** — `gomobile` / Flutter FFI packages.
-3. **Native render-tree renderer** — for toolkit-native (non-webview)
-   hosts, rendering directly from the document model instead of through
-   HTML.
-
-Every future surface consumes the same `document` model the HTML renderer
-uses today; nothing above requires changes to the parsing layer.
+v0.1 ships the Go package API and the `mdview` CLI on today's `document`
+model, ahead of an eventual v1.0 that commits to API stability. See
+[`docs/Design.md`](docs/Design.md#roadmap) for the full roadmap — source
+positions on nodes, JSON serialization, an exported asset bundle for
+fragment hosts, context-aware parse/render, C-shared FFI + WASM builds,
+mobile bindings, and a native render-tree renderer, roughly in that order.
 
 ## License
 
