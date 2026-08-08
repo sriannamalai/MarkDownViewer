@@ -1,0 +1,6 @@
+# Force LF on checkout on all platforms. The golden-file tests compare
+# renderer output byte-for-byte against committed fixtures; a CRLF checkout
+# (e.g. core.autocrlf=true on Windows CI runners) breaks that equality.
+* text=auto eol=lf
+*.woff2 binary
+*.png binary
