@@ -9,6 +9,17 @@ model and renderer options.
 
 ## [Unreleased]
 
+### Fixed
+
+- `parser`: a document whose first line is `---` and that never has a
+  closing `---` was silently discarded (`Parse` returned an empty
+  document) — go.abhg.dev/goldmark/frontmatter's block parser claimed the
+  entire input as an unterminated front-matter block. `ParseWith` now
+  detects the swallow (no front-matter data extracted, zero children, from
+  non-blank source) and reparses with front matter disabled, so the
+  content is recovered as CommonMark (`---` alone is a thematic break;
+  `---\nbody` is a thematic break plus a paragraph).
+
 ### Changed
 
 - Toolchain: requires Go 1.26 (up from 1.25).

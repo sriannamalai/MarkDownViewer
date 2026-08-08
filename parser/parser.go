@@ -16,6 +16,7 @@ package parser
 
 import (
 	"bytes"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/yuin/goldmark"
@@ -83,7 +84,26 @@ func ParseWith(src []byte, cfg Config) (*document.Document, error) {
 	ctx := gparser.NewContext()
 	root := md.Parser().Parse(text.NewReader(src), gparser.WithContext(ctx))
 	t := &transformer{src: src, cfg: cfg, lines: newLineIndex(src), slugs: map[string]int{}}
-	return t.document(root, ctx), nil
+	doc := t.document(root, ctx)
+
+	// A document that opens with "---" but never closes the fence is claimed
+	// entirely by the front-matter parser and silently discarded. When that
+	// happens (no front-matter data extracted AND an empty document from
+	// non-blank source), reparse with front matter disabled so the content
+	// is treated as Markdown. See the frontmatter extension's unterminated-
+	// fence behavior.
+	if cfg.FrontMatter && doc.Meta == nil && len(doc.Children()) == 0 && len(doc.Footnotes) == 0 &&
+		strings.TrimSpace(string(src)) != "" {
+		fallback := cfg
+		fallback.FrontMatter = false
+		fmd := build(fallback)
+		fctx := gparser.NewContext()
+		froot := fmd.Parser().Parse(text.NewReader(src), gparser.WithContext(fctx))
+		ft := &transformer{src: src, cfg: fallback, lines: newLineIndex(src), slugs: map[string]int{}}
+		return ft.document(froot, fctx), nil
+	}
+
+	return doc, nil
 }
 
 // build assembles the goldmark instance for cfg.

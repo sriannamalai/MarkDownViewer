@@ -16,6 +16,7 @@ func FuzzParseRender(f *testing.F) {
 		"[[w]] :smile: ~~s~~ [l](u) ![i](u)\n", "Term\n: def\n",
 		"---\nk: v\n---\nx[^1]\n\n[^1]: n\n", "$$\nx\n$$\n",
 		"<div><script>x</script></div>\n",
+		"---\nbody\n", // unterminated front-matter fence; see frontmatter_test.go
 	}
 	for _, s := range seeds {
 		f.Add([]byte(s))
