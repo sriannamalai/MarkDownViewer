@@ -8,6 +8,8 @@ package document
 type Kind int
 
 const (
+	// Values are pinned — a serialization/FFI compatibility contract.
+	// Never renumber; append only.
 	KindDocument Kind = iota
 	KindHeading
 	KindParagraph
