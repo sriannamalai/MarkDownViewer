@@ -26,15 +26,17 @@ func nestedListSource(depth int) []byte {
 // super-quadratic in nesting depth (empirically: ~2000 levels take ~6s,
 // ~4000 levels take >30s, on an input of only tens of kilobytes).
 //
-// This test uses a moderate depth (500 levels, ~250KB) that comfortably
-// parses in well under a second on typical hardware, guarded by a generous
-// 5s wall-clock watchdog so it stays non-flaky on slow/loaded CI. It is not
+// This test is a hang detector, not a benchmark: it uses a moderate depth
+// (300 levels) that parses in tens of milliseconds on typical hardware, and
+// a deliberately huge 30s wall-clock watchdog. Shared CI runners (notably
+// macOS under -race) have been observed 10-50x slower than local hardware —
+// a 500-level/5s version of this test flaked there. Only a pathological
+// regression (minutes-scale hang) should ever trip the watchdog. It is not
 // a mitigation — Parse has no built-in timeout, by design (see the package
-// doc comment) — it only catches a regression that would make even moderate
-// nesting depths pathologically slow.
+// doc comment).
 func TestDeeplyNestedListDoesNotHang(t *testing.T) {
-	const depth = 500
-	const watchdog = 5 * time.Second
+	const depth = 300
+	const watchdog = 30 * time.Second
 
 	src := nestedListSource(depth)
 
