@@ -118,6 +118,11 @@ func renderPage(w io.Writer, doc *document.Document, opts Options) error {
 		if err != nil {
 			return err
 		}
+		// The light chroma CSS above is unconditional; any token class it
+		// styles but the dark style leaves unstyled needs an explicit
+		// "inherit" rule here so it doesn't survive, unreadable, into a
+		// dark-preferring viewer. See neutralizeMissingClasses.
+		darkChroma += neutralizeMissingClasses(darkChroma, lightChroma)
 		ew.write("\n@media (prefers-color-scheme: dark){\n" + theme.Dark().CSS(":root") + "\n" + darkChroma)
 		if overrides := emitThemeOverrides(opts.ThemeOverrides); overrides != "" {
 			ew.write("\n" + overrides)

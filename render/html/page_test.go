@@ -2,12 +2,38 @@ package htmlrender
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/sriannamalai/markdownviewer/document"
 	"github.com/sriannamalai/markdownviewer/parser"
 )
+
+// hexColorRe finds CSS hex colors, used to pull sentinel colors out of a
+// chroma style's generated CSS without hardcoding palette values that chroma
+// (or the styles it ships) could change out from under us.
+var hexColorRe = regexp.MustCompile(`#[0-9a-fA-F]{6}`)
+
+// sentinelColors returns up to n distinct hex colors found in css, in
+// first-seen order.
+func sentinelColors(t *testing.T, css string, n int) []string {
+	t.Helper()
+	seen := map[string]bool{}
+	var out []string
+	for _, m := range hexColorRe.FindAllString(css, -1) {
+		if seen[m] {
+			continue
+		}
+		seen[m] = true
+		out = append(out, m)
+		if len(out) == n {
+			return out
+		}
+	}
+	t.Fatalf("fewer than %d distinct hex colors found in css: %q", n, css)
+	return nil
+}
 
 type failAfterWriter struct {
 	bytesWritten int
@@ -185,6 +211,109 @@ func TestThemeOverrideKeyValidation(t *testing.T) {
 	// Verify valid key is emitted
 	if !strings.Contains(got, "--md-valid-key:blue") {
 		t.Error("valid key should be emitted")
+	}
+}
+
+// codeHeavyMD is a small code-heavy fixture: several plain identifiers
+// (chroma class "nx", e.g. "fmt", "os") alongside keywords/strings, since the
+// dark-mode invisible-text bug was specifically about token classes one
+// chroma style leaves unstyled while the other styles explicitly.
+const codeHeavyMD = "```go\npackage main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(os.Args)\n}\n```\n"
+
+func TestDarkPageContainsGithubDarkPalette(t *testing.T) {
+	darkCSS, err := chromaCSS("github-dark")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sentinels := sentinelColors(t, darkCSS, 2)
+
+	got := render(t, codeHeavyMD, func(o *Options) { o.Fragment = false; o.ThemeName = "dark"; o.Highlight = true })
+	for _, c := range sentinels {
+		if !strings.Contains(got, c) {
+			t.Errorf("dark page missing github-dark sentinel color %s", c)
+		}
+	}
+}
+
+func TestLightPageContainsGithubPalette(t *testing.T) {
+	lightCSS, err := chromaCSS("github")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sentinels := sentinelColors(t, lightCSS, 2)
+
+	got := render(t, codeHeavyMD, func(o *Options) { o.Fragment = false; o.ThemeName = "light"; o.Highlight = true })
+	for _, c := range sentinels {
+		if !strings.Contains(got, c) {
+			t.Errorf("light page missing github sentinel color %s", c)
+		}
+	}
+}
+
+func TestAutoPageContainsBothPalettesDarkInsideMediaQuery(t *testing.T) {
+	lightCSS, err := chromaCSS("github")
+	if err != nil {
+		t.Fatal(err)
+	}
+	darkCSS, err := chromaCSS("github-dark")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lightSentinel := sentinelColors(t, lightCSS, 1)[0]
+	darkSentinel := sentinelColors(t, darkCSS, 1)[0]
+
+	got := render(t, codeHeavyMD, func(o *Options) { o.Fragment = false; o.ThemeName = "auto"; o.Highlight = true })
+
+	mediaIdx := strings.Index(got, "@media (prefers-color-scheme: dark){")
+	if mediaIdx == -1 {
+		t.Fatalf("no dark media query found")
+	}
+	closeIdx := strings.Index(got[mediaIdx:], "</style>")
+	if closeIdx == -1 {
+		t.Fatalf("no </style> after media query")
+	}
+	mediaBlock := got[mediaIdx : mediaIdx+closeIdx]
+
+	if !strings.Contains(got[:mediaIdx], lightSentinel) {
+		t.Errorf("light sentinel %s should appear before the dark media query", lightSentinel)
+	}
+	if !strings.Contains(mediaBlock, darkSentinel) {
+		t.Errorf("dark sentinel %s should appear inside the dark media query", darkSentinel)
+	}
+}
+
+// TestAutoModeNeutralizesLightOnlyTokenClasses is the direct regression test
+// for the invisible-dark-text bug: "github" (light) styles NameOther (chroma
+// class "nx", e.g. a plain identifier like "fmt") but "github-dark" leaves
+// it unstyled. In auto mode the light ".chroma .nx" rule is unconditional
+// (not inside any media query), so without neutralization it would remain
+// the only rule for that class even when the OS prefers dark — leaving
+// near-black text (#1f2328) on a dark background. The dark media block must
+// carry an explicit override for every class the light block styles.
+func TestAutoModeNeutralizesLightOnlyTokenClasses(t *testing.T) {
+	lightCSS, err := chromaCSS("github")
+	if err != nil {
+		t.Fatal(err)
+	}
+	darkCSS, err := chromaCSS("github-dark")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lightOnly := neutralizeMissingClasses(darkCSS, lightCSS)
+	if lightOnly == "" {
+		t.Fatal("expected at least one class github styles that github-dark leaves unstyled (e.g. NameOther/.nx) — test fixture assumption broke")
+	}
+
+	got := render(t, codeHeavyMD, func(o *Options) { o.Fragment = false; o.ThemeName = "auto"; o.Highlight = true })
+	mediaIdx := strings.Index(got, "@media (prefers-color-scheme: dark){")
+	if mediaIdx == -1 {
+		t.Fatalf("no dark media query found")
+	}
+	closeIdx := strings.Index(got[mediaIdx:], "</style>")
+	mediaBlock := got[mediaIdx : mediaIdx+closeIdx]
+
+	if !strings.Contains(mediaBlock, ".nx{color:inherit;background-color:inherit}") {
+		t.Errorf("dark media block should neutralize the light-only .nx rule; got media block:\n%s", mediaBlock)
 	}
 }
 
