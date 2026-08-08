@@ -107,3 +107,14 @@ Document
     HTMLInline "</em>"
 `)
 }
+
+// TestBOMStripped verifies a leading UTF-8 byte order mark doesn't defeat
+// block-level construct recognition (e.g. a BOM-prefixed "# Heading"
+// rendering as a literal paragraph instead of a heading).
+func TestBOMStripped(t *testing.T) {
+	assertDoc(t, "\xEF\xBB\xBF# Heading\n", `
+Document
+  Heading[1] id="heading"
+    Text "Heading"
+`)
+}

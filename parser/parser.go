@@ -3,6 +3,8 @@
 package parser
 
 import (
+	"bytes"
+
 	"github.com/yuin/goldmark"
 	emoji "github.com/yuin/goldmark-emoji"
 	"github.com/yuin/goldmark/extension"
@@ -14,6 +16,17 @@ import (
 	"github.com/sriannamalai/markdownviewer/document"
 )
 
+// utf8BOM is the UTF-8 encoding of U+FEFF (byte order mark).
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
+
+// stripBOM removes a leading UTF-8 byte order mark, if present. goldmark
+// treats a BOM as ordinary text content rather than as whitespace, which
+// otherwise breaks recognition of block-level constructs like "# Heading"
+// on the first line.
+func stripBOM(src []byte) []byte {
+	return bytes.TrimPrefix(src, utf8BOM)
+}
+
 // Parse converts Markdown source into a document.Document using Default's
 // extension set.
 func Parse(src []byte) (*document.Document, error) {
@@ -23,6 +36,7 @@ func Parse(src []byte) (*document.Document, error) {
 // ParseWith converts Markdown source into a document.Document using the
 // syntax extensions selected by cfg.
 func ParseWith(src []byte, cfg Config) (*document.Document, error) {
+	src = stripBOM(src)
 	md := build(cfg)
 	ctx := gparser.NewContext()
 	root := md.Parser().Parse(text.NewReader(src), gparser.WithContext(ctx))

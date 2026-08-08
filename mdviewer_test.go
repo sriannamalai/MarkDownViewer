@@ -81,3 +81,16 @@ func TestThemeCustomization(t *testing.T) {
 		t.Fatal("WithStylesheet not applied")
 	}
 }
+
+// TestBOMPrefixedInput verifies a leading UTF-8 BOM doesn't defeat heading
+// recognition through the facade (the CLI and any host that reads a file
+// verbatim go through this path).
+func TestBOMPrefixedInput(t *testing.T) {
+	out, err := Render([]byte("\xEF\xBB\xBF# Hi\n"), Fragment())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `<h1 id="hi">Hi</h1>`) {
+		t.Fatalf("BOM not stripped before parsing, got %q", out)
+	}
+}
