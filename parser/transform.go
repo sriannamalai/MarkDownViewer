@@ -169,6 +169,32 @@ func setSpan(n document.Node, s document.Span) {
 	}
 }
 
+// childUnionSpan returns the union of the direct children's non-zero spans.
+func childUnionSpan(n document.Node) document.Span {
+	var u document.Span
+	for _, c := range n.Children() {
+		sp, ok := c.(interface{ Span() document.Span })
+		if !ok {
+			continue
+		}
+		s := sp.Span()
+		if s.IsZero() {
+			continue
+		}
+		if u.IsZero() {
+			u = s
+			continue
+		}
+		if s.StartOffset < u.StartOffset {
+			u.StartOffset, u.StartLine = s.StartOffset, s.StartLine
+		}
+		if s.EndOffset > u.EndOffset {
+			u.EndOffset, u.EndLine = s.EndOffset, s.EndLine
+		}
+	}
+	return u
+}
+
 func (t *transformer) document(root ast.Node, ctx gparser.Context) *document.Document {
 	doc := &document.Document{}
 	t.appendChildren(doc, root)
@@ -254,8 +280,10 @@ func (t *transformer) convert(n ast.Node) document.Node {
 	case *ast.Blockquote:
 		bq := &document.BlockQuote{}
 		t.appendChildren(bq, n)
+		bq.SetSpan(childUnionSpan(bq))
 		if t.cfg.Admonitions {
 			if adm := promoteAdmonition(bq); adm != nil {
+				adm.SetSpan(bq.Span())
 				return adm
 			}
 		}
@@ -266,6 +294,7 @@ func (t *transformer) convert(n ast.Node) document.Node {
 			l.Start = n.Start
 		}
 		t.appendChildren(l, n)
+		l.SetSpan(childUnionSpan(l))
 		return l
 	case *ast.ListItem:
 		li := &document.ListItem{}
@@ -273,6 +302,7 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		t.item = li
 		t.appendChildren(li, n)
 		t.item = prev
+		li.SetSpan(childUnionSpan(li))
 		return li
 	case *ast.FencedCodeBlock:
 		lang := unescapeText(n.Language(t.src))
@@ -353,18 +383,28 @@ func (t *transformer) convert(n ast.Node) document.Node {
 			}[a])
 		}
 		t.appendChildren(tbl, n)
+		tbl.SetSpan(childUnionSpan(tbl))
 		return tbl
 	case *east.TableHeader:
 		row := &document.TableRow{Header: true}
 		t.appendChildren(row, n)
+		row.SetSpan(childUnionSpan(row))
 		return row
 	case *east.TableRow:
 		row := &document.TableRow{}
 		t.appendChildren(row, n)
+		row.SetSpan(childUnionSpan(row))
 		return row
 	case *east.TableCell:
 		cell := &document.TableCell{}
 		t.appendChildren(cell, n)
+		// TableCell's children are inline nodes (zero span by convention),
+		// so a child union would always be zero here. Unlike Table and
+		// TableRow/TableHeader, the goldmark TableCell ast node carries its
+		// own Lines() segment (see extension/table.go parseRow, which calls
+		// node.Lines().Append(seg)), so leafSpan gives the real per-cell
+		// span; Table/TableRow then pick it up via childUnionSpan below.
+		cell.SetSpan(t.leafSpan(n))
 		return cell
 	case *east.Strikethrough:
 		s := &document.Strikethrough{}
@@ -390,20 +430,28 @@ func (t *transformer) convert(n ast.Node) document.Node {
 	case *east.Footnote:
 		def := &document.FootnoteDef{Index: n.Index}
 		t.appendChildren(def, n)
+		def.SetSpan(childUnionSpan(def))
 		return def
 	case *emast.Emoji:
 		return &document.Text{Value: string(n.Value.Unicode)}
 	case *east.DefinitionList:
 		dl := &document.DefinitionList{}
 		t.appendChildren(dl, n)
+		dl.SetSpan(childUnionSpan(dl))
 		return dl
 	case *east.DefinitionTerm:
 		dt := &document.DefinitionTerm{}
 		t.appendChildren(dt, n)
+		// Like TableCell, DefinitionTerm's own ast node carries its Lines()
+		// segment directly (extension/definition_list.go: term.Lines().
+		// Append(segment)), while its children are inline (zero span), so
+		// leafSpan is the real source here.
+		dt.SetSpan(t.leafSpan(n))
 		return dt
 	case *east.DefinitionDescription:
 		dd := &document.DefinitionDesc{}
 		t.appendChildren(dd, n)
+		dd.SetSpan(childUnionSpan(dd))
 		return dd
 	case *wikilink.Node:
 		wl := &document.WikiLink{Target: string(n.Target)}

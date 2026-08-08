@@ -71,3 +71,51 @@ func TestInlineNodesHaveZeroSpan(t *testing.T) {
 		}
 	}
 }
+
+func TestContainerSpansUnion(t *testing.T) {
+	src := "- one\n- two\n  - nested\n"
+	doc, _ := Parse([]byte(src))
+	list := doc.Children()[0].(*document.List)
+	ls := list.Span()
+	if ls.StartLine != 1 || ls.EndLine != 3 {
+		t.Fatalf("list span %+v", ls)
+	}
+	item2 := list.Children()[1].(*document.ListItem)
+	is := item2.Span()
+	if is.StartLine != 2 || is.EndLine != 3 {
+		t.Fatalf("item span %+v", is)
+	}
+}
+
+func TestBlockquoteAndAdmonitionSpans(t *testing.T) {
+	bq := spanOf(t, "> quoted\n> more\n", 0)
+	if bq.StartLine != 1 || bq.EndLine != 2 {
+		t.Fatalf("blockquote span %+v", bq)
+	}
+	adm := spanOf(t, "> [!NOTE]\n> body\n", 0)
+	if adm.StartLine == 0 || adm.EndLine < adm.StartLine {
+		t.Fatalf("admonition span %+v", adm)
+	}
+}
+
+func TestTableSpan(t *testing.T) {
+	s := spanOf(t, "| a |\n|---|\n| b |\n", 0)
+	if s.StartLine != 1 || s.EndLine != 3 {
+		t.Fatalf("table span %+v", s)
+	}
+}
+
+func TestThematicBreakZeroSpan(t *testing.T) {
+	// "***" rather than "---": with the default Config, FrontMatter is
+	// enabled, and a "-"-delimited line at document line 1 is claimed by
+	// the frontmatter block parser (go.abhg.dev/goldmark/frontmatter),
+	// which swallows the entire input as an unterminated frontmatter
+	// block when no closing delimiter follows — an unrelated, pre-existing
+	// default-config interaction, not a thematic-break/span concern. "*"
+	// is not a frontmatter delimiter, so it exercises the same
+	// ThematicBreak path without tripping over that.
+	s := spanOf(t, "***\n", 0)
+	if !s.IsZero() {
+		t.Fatalf("thematic break should have zero span, got %+v", s)
+	}
+}
