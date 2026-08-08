@@ -80,30 +80,98 @@ func Parse(src []byte) (*document.Document, error) {
 // nested list input.
 func ParseWith(src []byte, cfg Config) (*document.Document, error) {
 	src = sanitizeUTF8(stripBOM(src))
+	doc := parseOnce(src, cfg)
+
+	// A document that opens with "---" but never closes the fence is claimed
+	// entirely by the front-matter parser and silently discarded. When that
+	// happens (no front-matter data extracted, an empty document, from
+	// non-blank source, and the opening delimiter genuinely has no matching
+	// closing line anywhere in src), reparse with front matter disabled so
+	// the content is treated as Markdown. See frontMatterFenceTerminated
+	// for why the closing-line scan — rather than frontmatter.Get(ctx) ==
+	// nil — is the reliable signal here: the frontmatter extension's
+	// Close() runs unconditionally at EOF, even for a block that was never
+	// actually closed by a matching delimiter, so Get(ctx) is non-nil
+	// either way and cannot by itself distinguish "closed, empty body" from
+	// "never closed".
+	if cfg.FrontMatter && doc.Meta == nil && len(doc.Children()) == 0 && len(doc.Footnotes) == 0 &&
+		strings.TrimSpace(string(src)) != "" && !frontMatterFenceTerminated(src) {
+		fallback := cfg
+		fallback.FrontMatter = false
+		return parseOnce(src, fallback), nil
+	}
+
+	return doc, nil
+}
+
+// parseOnce runs goldmark once over src with cfg's extension set and
+// transforms the result into a document.Document. It is the shared
+// build-parse-transform sequence behind both ParseWith's primary parse and
+// its unterminated-front-matter-fence fallback reparse.
+func parseOnce(src []byte, cfg Config) *document.Document {
 	md := build(cfg)
 	ctx := gparser.NewContext()
 	root := md.Parser().Parse(text.NewReader(src), gparser.WithContext(ctx))
 	t := &transformer{src: src, cfg: cfg, lines: newLineIndex(src), slugs: map[string]int{}}
-	doc := t.document(root, ctx)
+	return t.document(root, ctx)
+}
 
-	// A document that opens with "---" but never closes the fence is claimed
-	// entirely by the front-matter parser and silently discarded. When that
-	// happens (no front-matter data extracted AND an empty document from
-	// non-blank source), reparse with front matter disabled so the content
-	// is treated as Markdown. See the frontmatter extension's unterminated-
-	// fence behavior.
-	if cfg.FrontMatter && doc.Meta == nil && len(doc.Children()) == 0 && len(doc.Footnotes) == 0 &&
-		strings.TrimSpace(string(src)) != "" {
-		fallback := cfg
-		fallback.FrontMatter = false
-		fmd := build(fallback)
-		fctx := gparser.NewContext()
-		froot := fmd.Parser().Parse(text.NewReader(src), gparser.WithContext(fctx))
-		ft := &transformer{src: src, cfg: fallback, lines: newLineIndex(src), slugs: map[string]int{}}
-		return ft.document(froot, fctx), nil
+// frontMatterDelims are the delimiter characters recognized by
+// go.abhg.dev/goldmark/frontmatter's DefaultFormats (TOML '+', YAML '-');
+// this package never customizes frontmatter.Extender.Formats, so these are
+// the only two delimiters that can ever open a front-matter block here.
+const frontMatterDelims = "-+"
+
+// frontMatterFenceTerminated reports whether src's first line opens a
+// front-matter block (three or more repeated '-' or '+' characters, the
+// entire line) that is later closed by a matching line — same character,
+// same repeat count — anywhere in the rest of src. This mirrors
+// (*frontmatter.Parser).Continue's exact-match closing rule byte for byte.
+//
+// It returns true when line 1 isn't a front-matter opener at all, since
+// there is then no fence to be unterminated.
+func frontMatterFenceTerminated(src []byte) bool {
+	first, rest := nextLine(src)
+	delim, count := frontMatterDelimLine(first)
+	if delim == 0 {
+		return true
 	}
+	for len(rest) > 0 {
+		var line []byte
+		line, rest = nextLine(rest)
+		if d, c := frontMatterDelimLine(line); d == delim && c == count {
+			return true
+		}
+	}
+	return false
+}
 
-	return doc, nil
+// nextLine splits src at the first '\n', returning the line (including the
+// '\n', if any) and the remainder.
+func nextLine(src []byte) (line, rest []byte) {
+	if i := bytes.IndexByte(src, '\n'); i >= 0 {
+		return src[:i+1], src[i+1:]
+	}
+	return src, nil
+}
+
+// frontMatterDelimLine reports the delimiter character and repeat count if
+// line, once trailing "\r\n"/"\n" is stripped, consists of three or more
+// repetitions of a single character drawn from frontMatterDelims. Mirrors
+// the unexported lineDelim in go.abhg.dev/goldmark/frontmatter's parse.go.
+func frontMatterDelimLine(line []byte) (delim byte, count int) {
+	line = bytes.TrimSuffix(line, []byte("\n"))
+	line = bytes.TrimSuffix(line, []byte("\r"))
+	if len(line) < 3 || !strings.Contains(frontMatterDelims, string(line[0])) {
+		return 0, 0
+	}
+	delim = line[0]
+	for _, c := range line[1:] {
+		if c != delim {
+			return 0, 0
+		}
+	}
+	return delim, len(line)
 }
 
 // build assembles the goldmark instance for cfg.
