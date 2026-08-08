@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/yuin/goldmark/ast"
+	east "github.com/yuin/goldmark/extension/ast"
 	gparser "github.com/yuin/goldmark/parser"
 
 	"github.com/sriannamalai/markdownviewer/document"
@@ -26,14 +27,29 @@ func (t *transformer) document(root ast.Node, ctx gparser.Context) *document.Doc
 func (t *transformer) appendChildren(parent document.Node, n ast.Node) {
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 		if out := t.convert(c); out != nil {
-			parent.AppendChild(out)
-			// ast.Text carries trailing break flags; emit them as siblings.
-			if txt, ok := c.(*ast.Text); ok {
-				if txt.HardLineBreak() {
-					parent.AppendChild(&document.HardBreak{})
-				} else if txt.SoftLineBreak() {
-					parent.AppendChild(&document.SoftBreak{})
+			// The Linkify inline parser triggers on plain spaces and, when
+			// no URL/email matches, leaves the surrounding prose split
+			// across sibling ast.Text nodes instead of one merged run.
+			// Coalesce adjacent document.Text nodes so output stays
+			// identical to the non-Linkify tree.
+			if txt, ok := out.(*document.Text); ok {
+				if kids := parent.Children(); len(kids) > 0 {
+					if last, ok := kids[len(kids)-1].(*document.Text); ok {
+						last.Value += txt.Value
+						out = nil
+					}
 				}
+			}
+			if out != nil {
+				parent.AppendChild(out)
+			}
+		}
+		// ast.Text carries trailing break flags; emit them as siblings.
+		if txt, ok := c.(*ast.Text); ok {
+			if txt.HardLineBreak() {
+				parent.AppendChild(&document.HardBreak{})
+			} else if txt.SoftLineBreak() {
+				parent.AppendChild(&document.SoftBreak{})
 			}
 		}
 	}
@@ -124,6 +140,38 @@ func (t *transformer) convert(n ast.Node) document.Node {
 			b.Write(seg.Value(t.src))
 		}
 		return &document.HTMLInline{HTML: b.String()}
+	case *east.Table:
+		tbl := &document.Table{}
+		for _, a := range n.Alignments {
+			tbl.Alignments = append(tbl.Alignments, map[east.Alignment]document.Alignment{
+				east.AlignNone: document.AlignNone, east.AlignLeft: document.AlignLeft,
+				east.AlignCenter: document.AlignCenter, east.AlignRight: document.AlignRight,
+			}[a])
+		}
+		t.appendChildren(tbl, n)
+		return tbl
+	case *east.TableHeader:
+		row := &document.TableRow{Header: true}
+		t.appendChildren(row, n)
+		return row
+	case *east.TableRow:
+		row := &document.TableRow{}
+		t.appendChildren(row, n)
+		return row
+	case *east.TableCell:
+		cell := &document.TableCell{}
+		t.appendChildren(cell, n)
+		return cell
+	case *east.Strikethrough:
+		s := &document.Strikethrough{}
+		t.appendChildren(s, n)
+		return s
+	case *east.TaskCheckBox:
+		if t.item != nil {
+			t.item.Task = true
+			t.item.Checked = n.IsChecked
+		}
+		return nil
 	default:
 		return nil // extension nodes handled in Tasks 3-8
 	}

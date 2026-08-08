@@ -4,6 +4,7 @@ package parser
 
 import (
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
 	gparser "github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 
@@ -35,5 +36,17 @@ func build(cfg Config) goldmark.Markdown {
 func extensions(cfg Config) []goldmark.Extender {
 	var exts []goldmark.Extender
 	// Populated by Tasks 3–8.
+	if cfg.Tables {
+		exts = append(exts, extension.Table)
+	}
+	if cfg.Strikethrough {
+		exts = append(exts, extension.Strikethrough)
+	}
+	if cfg.TaskLists {
+		exts = append(exts, extension.TaskList)
+	}
+	if cfg.Linkify {
+		exts = append(exts, extension.Linkify)
+	}
 	return exts
 }
