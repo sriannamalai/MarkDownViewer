@@ -3,6 +3,10 @@ package parser
 import (
 	"testing"
 
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/text"
+	"go.abhg.dev/goldmark/frontmatter"
+
 	"github.com/sriannamalai/markdownviewer/document"
 )
 
@@ -126,6 +130,35 @@ func TestCommonMarkOnlyUnaffectedByFallback(t *testing.T) {
 	}
 	if _, ok := kids[0].(*document.ThematicBreak); !ok {
 		t.Fatalf("want ThematicBreak, got %T", kids[0])
+	}
+}
+
+// TestUpstreamFrontmatterStillSwallowsUnterminated is an upstream canary,
+// not a test of our own code: it builds a goldmark instance directly with
+// go.abhg.dev/goldmark/frontmatter's &frontmatter.Extender{} (bypassing our
+// ParseWith entirely) and parses an unterminated fence via goldmark's own
+// Parser().Parse API. It asserts upstream still swallows the whole
+// document into the unterminated front-matter block (zero children on the
+// resulting AST document) — the exact behavior frontMatterFenceTerminated
+// and its fallback trigger in parser.go exist to work around.
+//
+// If this test fails after a dependency bump, upstream changed its
+// swallow-on-unterminated behavior: re-verify frontMatterFenceTerminated
+// AND the fallback trigger conditions in parser.go against the new
+// parse.go before assuming anything else is safe. Today's other tests
+// only exercise our mirror of that grammar, not upstream's actual
+// behavior, so they would not catch this on their own.
+func TestUpstreamFrontmatterStillSwallowsUnterminated(t *testing.T) {
+	md := goldmark.New(
+		goldmark.WithExtensions(
+			&frontmatter.Extender{},
+		),
+	)
+	doc := md.Parser().Parse(text.NewReader([]byte("---\nbody\n")))
+	if n := doc.ChildCount(); n != 0 {
+		t.Fatalf("upstream frontmatter no longer swallows an unterminated "+
+			"fence: got %d children, want 0 (re-verify frontMatterFenceTerminated "+
+			"and the ParseWith fallback trigger against the new parse.go)", n)
 	}
 }
 
