@@ -7,6 +7,17 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [Unreleased]
+
+### Changed
+
+- Toolchain: requires Go 1.26 (up from 1.25).
+- Dependencies updated to latest: `github.com/BurntSushi/toml` v1.5.0 →
+  v1.6.0, `github.com/dlclark/regexp2/v2` v2.2.1 → v2.6.0, `golang.org/x/net`
+  v0.26.0 → v0.57.0. `goldmark`, `goldmark-emoji`, `frontmatter`, `wikilink`,
+  `chroma/v2`, and `bluemonday` were already pinned at their latest published
+  versions, so those did not change.
+
 ## [0.1.1] - 2026-08-08
 
 Test-infrastructure follow-up to 0.1.0; no library code changes.

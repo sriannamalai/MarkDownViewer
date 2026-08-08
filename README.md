@@ -42,7 +42,7 @@ See [`docs/Design.md`](docs/Design.md) for the architecture and roadmap, and
 go get github.com/sriannamalai/markdownviewer
 ```
 
-Requires Go 1.25+.
+Requires Go 1.26+.
 
 ## Quick start
 
