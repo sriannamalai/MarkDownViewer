@@ -68,12 +68,12 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 			return err
 		}
 		err = viewer.RenderTo(f, src, opts...)
-		f.Close()
+		closeErr := f.Close()
 		if err != nil {
 			os.Remove(*out)
 			return err
 		}
-		return nil
+		return closeErr
 	}
 	return viewer.RenderTo(w, src, opts...)
 }
