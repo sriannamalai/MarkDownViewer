@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sriannamalai/markdownviewer/assets"
 	"github.com/sriannamalai/markdownviewer/document"
-	"github.com/sriannamalai/markdownviewer/internal/assets"
 	"github.com/sriannamalai/markdownviewer/theme"
 )
 

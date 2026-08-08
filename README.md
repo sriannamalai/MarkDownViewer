@@ -146,9 +146,16 @@ there to reuse if useful. Diagram and math nodes still emit their markup in
 fragment mode (`<pre class="mermaid">…</pre>`, `<span class="math …">…`),
 but as **inert placeholders**: without mermaid.js/KaTeX loaded, a viewer
 sees the raw diagram/math source until the host supplies those libraries
-itself. This library's embedded copies of mermaid/KaTeX are bundled for
-full-page output only and aren't currently exported for fragment hosts to
-reuse (see the roadmap in [`docs/Design.md`](docs/Design.md#roadmap)).
+itself.
+
+Fragment mode emits no CSS/JS. To activate mermaid/math in your own page:
+
+```go
+import "github.com/sriannamalai/markdownviewer/assets"
+// once per page:
+fmt.Fprintf(w, "<style>%s</style><script>%s</script><script>%s</script>",
+    assets.KatexCSS(), assets.KatexJS(), assets.MermaidJS())
+```
 
 Built-in themes are CSS custom-property sets layered over one base
 stylesheet: `light`, `dark`, and `auto` (light by default, with a

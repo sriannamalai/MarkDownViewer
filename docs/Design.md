@@ -21,7 +21,6 @@ below for what's expected to change before v1.0.
                                                      ┌────────────────┐
                                                      │  render/html   │──▶ HTML
                                                      │ (+ theme, +    │
-                                                     │  internal/     │
                                                      │  assets)       │
                                                      └────────────────┘
 ```
@@ -54,7 +53,7 @@ Two stages, one boundary in between:
 | `parser` | Markdown → `document.Document`. Wraps goldmark; owns the goldmark→document tree transform, heading-slug generation, and the math/admonition extensions. `Config` toggles individual syntax extensions. |
 | `render/html` | `document.Document` → HTML. Sanitization (bluemonday), URL policy, page assembly, chroma syntax highlighting, resolver hook. |
 | `theme` | CSS custom-property theme definitions (`light`, `dark`) layered over a shared base stylesheet. |
-| `internal/assets` | Embedded, offline copies of KaTeX and mermaid (JS/CSS), inlined at build time. Not part of the public API. |
+| `assets` | Embedded, offline copies of KaTeX and mermaid (JS/CSS), inlined at build time. Exported for fragment hosts to inject. |
 | `cmd/mdview` | CLI: reads a file or stdin, calls the facade, writes HTML. |
 
 ## The layering rule
