@@ -7,6 +7,64 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [Unreleased]
+
+### Added
+
+- **`WithMaxWidth(width string) Option` / `mdview -width STRING`.** Opt in to
+  a constrained content width (any CSS length, e.g. `"860px"`, `"70ch"`) via
+  the `--md-max-width` CSS custom property. Values are validated
+  defensively: one containing `;` or `}` — either of which could break out
+  of the CSS declaration it's emitted into — is rejected and the option
+  no-ops rather than emitting a defanged value.
+- **`mdview` no-args help.** Running `mdview` with no file argument and no
+  piped input (stdin is an interactive terminal) now prints name/version,
+  a one-line description, the flag defaults, and a few example invocations,
+  then exits 0 — instead of blocking forever on a read that would never
+  complete.
+
+### Changed
+
+- **Default page layout is now fluid.** `theme/base.css` no longer sets a
+  fixed `max-width: 860px`; the default is `max-width: var(--md-max-width,
+  none)`, i.e. no width constraint unless `WithMaxWidth`/`-width` is used.
+  **Behavior change:** hosts relying on the old fixed-860px default for
+  layout should pass `WithMaxWidth("860px")` (or `-width 860px`) to keep it.
+- Task-list `<li>`s get `class="task-list-item"` (tight and loose), and
+  their `<ul>` gets `class="contains-task-list"` when any child is a task;
+  `theme/base.css` uses these to drop the list bullet and indent in favor
+  of the checkbox's own alignment, matching GitHub's rendering.
+
+### Fixed
+
+- **Dark-mode syntax highlighting had invisible text.** In `auto` theme
+  mode, a chroma token class that the light style ("github") sets a color
+  for but the dark style ("github-dark") leaves unstyled (e.g. `.nx`, a
+  plain identifier) kept its unconditional light-mode color even when the
+  OS preferred dark, since the dark stylesheet — layered in a
+  `prefers-color-scheme` media query — never emitted a competing rule for
+  that class. The result was near-black text on a dark background. The
+  dark chroma block now carries an explicit `color:inherit` for every class
+  the light block styles that it doesn't, so it always wins the cascade tie
+  and falls back to a readable color instead.
+- **Task-list checkboxes rendered as bullets with text wrapping below
+  them.** A loose task item rendered its checkbox as a sibling before the
+  paragraph (`<li><input.../> <p>text</p>`), which pushed the text onto
+  its own line. The checkbox now nests inside the first paragraph
+  (`<li><p><input.../> text</p>...`), matching cmark-gfm's shape; see also
+  the `task-list-item`/`contains-task-list` classes under Changed.
+- **Mermaid diagrams were unreadable on dark backgrounds.** `auto` theme
+  mode always initialized mermaid with its light `default` theme
+  regardless of the OS's actual color scheme; it now picks mermaid's theme
+  in the browser at load time via
+  `window.matchMedia('(prefers-color-scheme: dark)')`, matching the
+  condition the page's own CSS already uses. Separately, mermaid's
+  built-in themes paint an opaque SVG canvas background that doesn't track
+  `--md-bg`; `theme/base.css` now forces it transparent so the page
+  background shows through.
+- **`mdview` with no arguments hung waiting on stdin.** See the no-args
+  help entry under Added.
+
 ## [0.2.0] - 2026-08-08
 
 ### Added

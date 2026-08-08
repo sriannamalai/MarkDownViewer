@@ -164,11 +164,19 @@ mdview -o out.html README.md          # file to file
 mdview -theme dark README.md          # force dark theme
 cat notes.md | mdview -fragment       # stdin to stdout, body-only fragment
 mdview -unsafe notes.md               # trust the input: raw HTML, all schemes
+mdview -width 860px README.md         # constrain content width (default is fluid)
 ```
 
 Full flag list: `-o FILE` (default stdout), `-theme light|dark|auto`
 (default `auto`), `-fragment`, `-unsafe`, `-no-mermaid`, `-no-math`,
-`-no-highlight`.
+`-no-highlight`, `-width STRING` (any CSS length, e.g. `860px` or `70ch`;
+default is fluid — no max-width).
+
+Running `mdview` with no file argument and no piped input (stdin is an
+interactive terminal) prints name/version, flag defaults, and a few example
+invocations instead of blocking on a read that would never complete. Piped
+or redirected stdin (`cat notes.md | mdview`) is unaffected — that still
+renders normally.
 
 ## Concurrency
 
@@ -237,6 +245,19 @@ out, err := markdownviewer.Render(src, markdownviewer.WithStylesheet(myCSS))
 
 Both are emitted into the page's `<style>` element; `</style` sequences in
 supplied content are stripped defensively.
+
+The default layout is fluid — no `max-width` constraint, so the page fills
+its container. Opt in to a constrained width with `WithMaxWidth` (any CSS
+length, e.g. `"860px"` or `"70ch"`), implemented as a `--md-max-width`
+theme override:
+
+```go
+out, err := markdownviewer.Render(src, markdownviewer.WithMaxWidth("860px"))
+```
+
+An empty string (the default) stays fluid. Since the value flows into a CSS
+custom-property declaration, one containing `;` or `}` is rejected
+defensively and the option no-ops rather than emitting a defanged value.
 
 ## Security model
 
