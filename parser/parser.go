@@ -16,6 +16,7 @@ package parser
 
 import (
 	"bytes"
+	"unicode/utf8"
 
 	"github.com/yuin/goldmark"
 	emoji "github.com/yuin/goldmark-emoji"
@@ -52,8 +53,13 @@ func stripBOM(src []byte) []byte {
 // replacement character. Markdown source is not guaranteed to be valid
 // UTF-8 (e.g. fuzzed or mis-decoded input), but every consumer downstream
 // of this package — goldmark's own text handling, Span byte offsets, and
-// the JSON codec in package document — assumes it is.
+// the JSON codec in package document — assumes it is. The overwhelmingly
+// common case is already-valid UTF-8, so check first and skip the copy
+// bytes.ToValidUTF8 would otherwise do on every Parse call.
 func sanitizeUTF8(src []byte) []byte {
+	if utf8.Valid(src) {
+		return src
+	}
 	return bytes.ToValidUTF8(src, invalidUTF8Replacement)
 }
 

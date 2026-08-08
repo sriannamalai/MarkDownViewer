@@ -3,6 +3,7 @@ package parser
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/sriannamalai/markdownviewer/document"
 )
@@ -117,4 +118,40 @@ Document
   Heading[1] id="heading"
     Text "Heading"
 `)
+}
+
+// TestInvalidUTF8Sanitized verifies invalid UTF-8 bytes in the source are
+// replaced with the Unicode replacement character before any node holds
+// them, rather than reaching MarshalJSON and being silently mangled there
+// (see sanitizeUTF8 in parser.go). Without this, a document containing
+// invalid UTF-8 fails to round-trip through the JSON codec: encoding/json
+// replaces invalid bytes with U+FFFD on marshal, so the pre-JSON tree and
+// the round-tripped tree diverge.
+func TestInvalidUTF8Sanitized(t *testing.T) {
+	src := []byte("a\xd1b\n")
+	doc, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	text := document.PlainText(doc)
+	if !utf8.ValidString(text) {
+		t.Fatalf("PlainText is not valid UTF-8: %q", text)
+	}
+	if !strings.ContainsRune(text, utf8.RuneError) {
+		t.Fatalf("expected U+FFFD replacement rune in %q", text)
+	}
+
+	data, err := document.MarshalJSON(doc)
+	if err != nil {
+		t.Fatalf("MarshalJSON: %v", err)
+	}
+	back, err := document.UnmarshalJSON(data)
+	if err != nil {
+		t.Fatalf("UnmarshalJSON: %v\njson: %s", err, data)
+	}
+	if document.Dump(doc) != document.Dump(back) {
+		t.Fatalf("round trip changed tree:\n--- orig ---\n%s\n--- back ---\n%s",
+			document.Dump(doc), document.Dump(back))
+	}
 }

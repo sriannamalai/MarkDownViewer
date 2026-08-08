@@ -35,6 +35,7 @@ func FuzzParseRender(f *testing.F) {
 func FuzzJSONRoundTrip(f *testing.F) {
 	f.Add([]byte("# h\n\npara *em*\n\n- [x] t\n\n| a |\n|---|\n| b |\n"))
 	f.Add([]byte("> [!NOTE]\n> x\n\n$m$\n\n```mermaid\ng\n```\n\ntext[^1]\n\n[^1]: n\n"))
+	f.Add([]byte("\xd1")) // regression: lone invalid UTF-8 byte, see sanitizeUTF8 in parser.go
 	f.Fuzz(func(t *testing.T, data []byte) {
 		doc, err := parser.Parse(data)
 		if err != nil {
