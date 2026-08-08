@@ -4,9 +4,11 @@ package parser
 
 import (
 	"github.com/yuin/goldmark"
+	emoji "github.com/yuin/goldmark-emoji"
 	"github.com/yuin/goldmark/extension"
 	gparser "github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
+	"go.abhg.dev/goldmark/frontmatter"
 
 	"github.com/sriannamalai/markdownviewer/document"
 )
@@ -50,6 +52,15 @@ func extensions(cfg Config) []goldmark.Extender {
 	}
 	if cfg.Footnotes {
 		exts = append(exts, extension.Footnote)
+	}
+	if cfg.DefinitionLists {
+		exts = append(exts, extension.DefinitionList)
+	}
+	if cfg.FrontMatter {
+		exts = append(exts, &frontmatter.Extender{})
+	}
+	if cfg.Emoji {
+		exts = append(exts, emoji.Emoji)
 	}
 	return exts
 }

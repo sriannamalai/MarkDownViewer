@@ -3,9 +3,11 @@ package parser
 import (
 	"strings"
 
+	emast "github.com/yuin/goldmark-emoji/ast"
 	"github.com/yuin/goldmark/ast"
 	east "github.com/yuin/goldmark/extension/ast"
 	gparser "github.com/yuin/goldmark/parser"
+	"go.abhg.dev/goldmark/frontmatter"
 
 	"github.com/sriannamalai/markdownviewer/document"
 )
@@ -22,7 +24,12 @@ func (t *transformer) document(root ast.Node, ctx gparser.Context) *document.Doc
 	doc := &document.Document{}
 	t.appendChildren(doc, root)
 	doc.Footnotes = t.footnotes
-	_ = ctx // front-matter extraction added in Task 5
+	if d := frontmatter.Get(ctx); d != nil {
+		var m map[string]any
+		if err := d.Decode(&m); err == nil {
+			doc.Meta = m
+		}
+	}
 	return doc
 }
 
@@ -33,12 +40,17 @@ func (t *transformer) appendChildren(parent document.Node, n ast.Node) {
 			// no URL/email matches, leaves the surrounding prose split
 			// across sibling ast.Text nodes instead of one merged run.
 			// Coalesce adjacent document.Text nodes so output stays
-			// identical to the non-Linkify tree.
-			if txt, ok := out.(*document.Text); ok {
-				if kids := parent.Children(); len(kids) > 0 {
-					if last, ok := kids[len(kids)-1].(*document.Text); ok {
-						last.Value += txt.Value
-						out = nil
+			// identical to the non-Linkify tree. Scoped to ast.Text inputs
+			// only, so it doesn't also swallow synthesized Text nodes from
+			// other node kinds (e.g. emoji shortcodes) that must stay
+			// distinct siblings.
+			if _, isASTText := c.(*ast.Text); isASTText {
+				if txt, ok := out.(*document.Text); ok {
+					if kids := parent.Children(); len(kids) > 0 {
+						if last, ok := kids[len(kids)-1].(*document.Text); ok {
+							last.Value += txt.Value
+							out = nil
+						}
 					}
 				}
 			}
@@ -189,6 +201,20 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		def := &document.FootnoteDef{Index: n.Index}
 		t.appendChildren(def, n)
 		return def
+	case *emast.Emoji:
+		return &document.Text{Value: string(n.Value.Unicode)}
+	case *east.DefinitionList:
+		dl := &document.DefinitionList{}
+		t.appendChildren(dl, n)
+		return dl
+	case *east.DefinitionTerm:
+		dt := &document.DefinitionTerm{}
+		t.appendChildren(dt, n)
+		return dt
+	case *east.DefinitionDescription:
+		dd := &document.DefinitionDesc{}
+		t.appendChildren(dd, n)
+		return dd
 	default:
 		return nil // extension nodes handled in Tasks 3-8
 	}
