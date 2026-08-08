@@ -65,21 +65,25 @@ func esc(s string) string {
 	return b.String()
 }
 
-func (r *writer) resolve(kind ResolveKind, dest string) string {
+// href returns an escaped attribute value ("" if blocked).
+//
+// A Resolver's ok=true result is trusted per its documented contract
+// (Options.Resolver): the host controls resolution, so its URL is emitted
+// as-is, bypassing the safeURL scheme allowlist. Everything else — no
+// Resolver installed, or the Resolver declined with ok=false — takes the
+// default resolution path (wikilink targets get ".md" appended; other
+// destinations pass through unchanged) and is filtered by safeURL exactly
+// as before.
+func (r *writer) href(kind ResolveKind, dest string) string {
 	if r.opts.Resolver != nil {
 		if u, ok := r.opts.Resolver(kind, dest); ok {
-			return u
+			return esc(u)
 		}
 	}
+	u := dest
 	if kind == ResolveWikiLink {
-		return dest + ".md"
+		u = dest + ".md"
 	}
-	return dest
-}
-
-// href returns an escaped, policy-checked attribute value ("" if blocked).
-func (r *writer) href(kind ResolveKind, dest string) string {
-	u := r.resolve(kind, dest)
 	if !r.opts.Unsafe && !safeURL(u) {
 		return ""
 	}

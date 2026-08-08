@@ -88,16 +88,30 @@ func TestUnsafeWikiLinkKeptWhenUnsafe(t *testing.T) {
 }
 
 func TestResolverCallback(t *testing.T) {
-	// Uses an allowlisted https scheme: safeURL's scheme allowlist (Task
-	// 11 hardening) applies uniformly to resolver output too, so a custom
-	// scheme like "vfs://" would now be blocked.
+	// Resolver output (ok=true) is trusted per its documented contract:
+	// hosts fully control resolution, so a custom scheme like "vfs://"
+	// bypasses safeURL and comes through untouched.
 	got := render(t, "![i](pic.png) [[P]]\n", func(o *Options) {
 		o.Resolver = func(kind ResolveKind, target string) (string, bool) {
-			return "https://vfs.example/" + target, true
+			return "vfs://" + target, true
 		}
 	})
-	if !strings.Contains(got, `src="https://vfs.example/pic.png"`) || !strings.Contains(got, `href="https://vfs.example/P"`) {
+	if !strings.Contains(got, `src="vfs://pic.png"`) || !strings.Contains(got, `href="vfs://P"`) {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestResolverDeclineFallsBackToDefaultFiltering(t *testing.T) {
+	// When the Resolver returns ok=false, the default resolution path
+	// applies and safeURL still filters the result — a Resolver cannot
+	// accidentally weaken the policy by declining.
+	got := render(t, "[x](javascript:alert(1))\n", func(o *Options) {
+		o.Resolver = func(kind ResolveKind, target string) (string, bool) {
+			return "", false
+		}
+	})
+	if strings.Contains(got, "href=") {
+		t.Fatalf("declined resolver should still be filtered by safeURL: %q", got)
 	}
 }
 

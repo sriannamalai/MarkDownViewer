@@ -11,6 +11,10 @@ const (
 
 // Resolver lets hosts rewrite link/image/wiki-link targets. Returning
 // ok=false falls back to default handling.
+//
+// Trust contract: URLs returned with ok=true are emitted as-is, without
+// scheme filtering — hosts fully control resolution, so they must not
+// echo untrusted targets back unexamined.
 type Resolver func(kind ResolveKind, target string) (url string, ok bool)
 
 type Options struct {
