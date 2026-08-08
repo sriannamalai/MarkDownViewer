@@ -87,7 +87,12 @@ func (t *transformer) convert(n ast.Node) document.Node {
 	case *ast.Blockquote:
 		bq := &document.BlockQuote{}
 		t.appendChildren(bq, n)
-		return bq // Admonition promotion added in Task 6
+		if t.cfg.Admonitions {
+			if adm := promoteAdmonition(bq); adm != nil {
+				return adm
+			}
+		}
+		return bq
 	case *ast.List:
 		l := &document.List{Ordered: n.IsOrdered(), Start: 1, Tight: n.IsTight}
 		if n.IsOrdered() {
@@ -218,6 +223,54 @@ func (t *transformer) convert(n ast.Node) document.Node {
 	default:
 		return nil // extension nodes handled in Tasks 3-8
 	}
+}
+
+var admonitionVariants = map[string]bool{
+	"NOTE": true, "TIP": true, "IMPORTANT": true, "WARNING": true, "CAUTION": true,
+}
+
+// promoteAdmonition returns an Admonition if bq's first paragraph starts
+// with a GitHub-style [!VARIANT] marker; the marker (and a following
+// SoftBreak) is stripped. Returns nil when bq is a plain quote.
+func promoteAdmonition(bq *document.BlockQuote) *document.Admonition {
+	kids := bq.Children()
+	if len(kids) == 0 {
+		return nil
+	}
+	p, ok := kids[0].(*document.Paragraph)
+	if !ok {
+		return nil
+	}
+	inl := p.Children()
+	if len(inl) == 0 {
+		return nil
+	}
+	txt, ok := inl[0].(*document.Text)
+	if !ok || len(txt.Value) < 4 || !strings.HasPrefix(txt.Value, "[!") || !strings.HasSuffix(txt.Value, "]") {
+		return nil
+	}
+	name := txt.Value[2 : len(txt.Value)-1]
+	if !admonitionVariants[name] {
+		return nil
+	}
+	adm := &document.Admonition{Variant: strings.ToLower(name)}
+	rest := inl[1:]
+	if len(rest) > 0 {
+		if _, isBreak := rest[0].(*document.SoftBreak); isBreak {
+			rest = rest[1:]
+		}
+	}
+	if len(rest) > 0 {
+		np := &document.Paragraph{}
+		for _, c := range rest {
+			np.AppendChild(c)
+		}
+		adm.AppendChild(np)
+	}
+	for _, c := range kids[1:] {
+		adm.AppendChild(c)
+	}
+	return adm
 }
 
 // codeOrSpecial maps special fence languages to dedicated nodes.
