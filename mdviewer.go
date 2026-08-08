@@ -11,7 +11,8 @@
 // # Concurrency
 //
 // All top-level functions in this package (Parse, ParseWith, Render,
-// RenderTo, RenderDoc, RenderDocTo) are safe for concurrent use: they share
+// RenderTo, RenderDoc, RenderDocTo, ParseContext, RenderContext,
+// RenderDocContext) are safe for concurrent use: they share
 // no mutable state across calls beyond two package-level values that are
 // constructed once and never mutated afterward — bluemonday's sanitizer
 // Policy (its README documents Sanitize as safe to call concurrently on a
@@ -33,10 +34,16 @@
 // pattern. RenderDoc/RenderDocTo receive an already-parsed tree and so are
 // not subject to the parse-time cost, but rendering a pathologically deep
 // tree built by other means can still be costly.
+//
+// ParseContext/RenderContext/RenderDocContext implement exactly this
+// timeout pattern for the caller: they honor ctx's deadline/cancellation
+// and return promptly, but the abandoned goroutine keeps running to
+// completion — its CPU is not reclaimed. See SECURITY.md.
 package markdownviewer
 
 import (
 	"bytes"
+	"context"
 	"io"
 
 	"github.com/sriannamalai/markdownviewer/document"
@@ -205,4 +212,72 @@ func RenderDoc(doc *document.Document, opts ...Option) ([]byte, error) {
 func RenderDocTo(w io.Writer, doc *document.Document, opts ...Option) error {
 	cfg := newConfig(opts)
 	return htmlrender.Render(w, doc, cfg.render)
+}
+
+// ParseContext is Parse with caller-side deadline support. If ctx ends
+// first, ParseContext returns ctx.Err() immediately — but the underlying
+// parse continues on its goroutine until it finishes and cannot be
+// stopped (the Markdown engine has no cancellation hooks). The guarantee
+// is bounded caller latency, not reclaimed CPU; see SECURITY.md.
+func ParseContext(ctx context.Context, src []byte) (*document.Document, error) {
+	type result struct {
+		doc *document.Document
+		err error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		d, err := Parse(src)
+		ch <- result{d, err}
+	}()
+	select {
+	case r := <-ch:
+		return r.doc, r.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// RenderContext is Render with caller-side deadline support (same
+// abandonment semantics as ParseContext).
+func RenderContext(ctx context.Context, src []byte, opts ...Option) ([]byte, error) {
+	type result struct {
+		out []byte
+		err error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		out, err := Render(src, opts...)
+		ch <- result{out, err}
+	}()
+	select {
+	case r := <-ch:
+		return r.out, r.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// RenderDocContext is RenderDocTo with caller-side deadline support. The
+// render happens into an internal buffer; w is written only on success,
+// so an abandoned render never touches w after this function returns.
+func RenderDocContext(ctx context.Context, w io.Writer, doc *document.Document, opts ...Option) error {
+	type result struct {
+		out []byte
+		err error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		out, err := RenderDoc(doc, opts...)
+		ch <- result{out, err}
+	}()
+	select {
+	case r := <-ch:
+		if r.err != nil {
+			return r.err
+		}
+		_, err := w.Write(r.out)
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

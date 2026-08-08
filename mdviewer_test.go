@@ -2,8 +2,10 @@ package markdownviewer
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sriannamalai/markdownviewer/document"
 	"github.com/sriannamalai/markdownviewer/parser"
@@ -147,5 +149,35 @@ func TestFacadeParseWith(t *testing.T) {
 	}
 	if strings.Contains(document.Dump(doc), "Strikethrough") {
 		t.Fatal("CommonMarkOnly must not parse strikethrough")
+	}
+}
+
+func TestParseContextCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := ParseContext(ctx, []byte("# Hi\n")); err != context.Canceled {
+		t.Fatalf("want context.Canceled, got %v", err)
+	}
+}
+
+func TestRenderContextNormal(t *testing.T) {
+	want, _ := Render([]byte("# Hi\n"), Fragment())
+	got, err := RenderContext(context.Background(), []byte("# Hi\n"), Fragment())
+	if err != nil || !bytes.Equal(want, got) {
+		t.Fatalf("err=%v equal=%t", err, bytes.Equal(want, got))
+	}
+}
+
+func TestRenderDocContextNoLateWrites(t *testing.T) {
+	doc, _ := Parse([]byte("# Hi\n"))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var buf bytes.Buffer
+	if err := RenderDocContext(ctx, &buf, doc, Fragment()); err != context.Canceled {
+		t.Fatalf("want Canceled, got %v", err)
+	}
+	time.Sleep(50 * time.Millisecond) // abandoned goroutine must not touch buf
+	if buf.Len() != 0 {
+		t.Fatalf("late write after cancellation: %q", buf.String())
 	}
 }

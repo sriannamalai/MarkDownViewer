@@ -63,9 +63,10 @@ does not bound it; a small, deeply-indented file is enough.
 **If you render untrusted Markdown, wrap `Parse` / `Render` (or
 `parser.Parse` / `parser.ParseWith`) in a wall-clock timeout** — for example
 by running the call in a goroutine and racing it against a timer — and treat
-a timeout as a rejected input. Context-aware `Parse`/`Render` variants that
-support cancellation natively are on the roadmap (see `docs/Design.md`); no
-such variant exists yet.
+a timeout as a rejected input. The `ParseContext` / `RenderContext` /
+`RenderDocContext` variants implement exactly this guard: the caller gets
+its deadline honored, while the abandoned operation finishes in the
+background (its CPU is not reclaimed — size your worker pool accordingly).
 
 This is treated as a known, documented limitation for v0.1 rather than a
 vulnerability to patch: we do not intend to patch goldmark internals or add
