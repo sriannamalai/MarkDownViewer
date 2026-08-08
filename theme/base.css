@@ -233,6 +233,15 @@ body.markdown-body {
   margin: 16px 0;
 }
 
+/* mermaid's "dark"/"default" built-in themes both paint an opaque canvas
+ * background sized to the diagram, independent of themeVariables — it
+ * doesn't track --md-bg. Force it transparent so the page background shows
+ * through instead of a mismatched rectangle (most visible in dark mode,
+ * where the default canvas fill reads as a pale box). */
+.markdown-body .mermaid svg {
+  background: transparent !important;
+}
+
 .markdown-body dl {
   padding: 0;
 }

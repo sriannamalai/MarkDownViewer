@@ -145,15 +145,24 @@ func renderPage(w io.Writer, doc *document.Document, opts Options) error {
 		return err
 	}
 	if mermaidUsed && opts.Mermaid {
-		mtheme := "default"
-		if opts.ThemeName == "dark" {
-			mtheme = "dark"
+		// A JS expression (not necessarily a string literal) for mermaid's
+		// theme option. "dark" and "light" are static; "auto" has no single
+		// static answer since the page has to pick a mermaid theme once at
+		// load time to match whichever prefers-color-scheme the CSS media
+		// query is about to render under — so it's evaluated in the
+		// browser via matchMedia, mirroring the CSS's own condition.
+		themeExpr := `"default"`
+		switch opts.ThemeName {
+		case "dark":
+			themeExpr = `"dark"`
+		case "auto", "":
+			themeExpr = `(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default')`
 		}
 		ew.write("<script>" + assets.MermaidJS() + "</script>\n")
 		if ew.err != nil {
 			return ew.err
 		}
-		_, ew.err = fmt.Fprintf(w, "<script>mermaid.initialize({startOnLoad:true,theme:%q});</script>\n", mtheme)
+		_, ew.err = fmt.Fprintf(w, "<script>mermaid.initialize({startOnLoad:true,theme:%s});</script>\n", themeExpr)
 		if ew.err != nil {
 			return ew.err
 		}

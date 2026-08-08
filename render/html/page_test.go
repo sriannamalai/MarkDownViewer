@@ -317,6 +317,43 @@ func TestAutoModeNeutralizesLightOnlyTokenClasses(t *testing.T) {
 	}
 }
 
+const mermaidMD = "```mermaid\ngraph TD\n  A --> B\n```\n"
+
+func TestMermaidDarkThemeInitializesDark(t *testing.T) {
+	got := render(t, mermaidMD, func(o *Options) { o.Fragment = false; o.ThemeName = "dark" })
+	if !strings.Contains(got, `mermaid.initialize({startOnLoad:true,theme:"dark"});`) {
+		t.Fatalf("dark page should initialize mermaid with the static \"dark\" theme, got %q", got)
+	}
+	if strings.Contains(got, "matchMedia") {
+		t.Errorf("explicit dark theme shouldn't need matchMedia, got %q", got)
+	}
+}
+
+func TestMermaidAutoThemeUsesMatchMedia(t *testing.T) {
+	got := render(t, mermaidMD, func(o *Options) { o.Fragment = false; o.ThemeName = "auto" })
+	want := `mermaid.initialize({startOnLoad:true,theme:(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default')});`
+	if !strings.Contains(got, want) {
+		t.Fatalf("auto page should pick mermaid's theme via matchMedia at load, got %q", got)
+	}
+}
+
+func TestMermaidLightThemeIsStaticDefault(t *testing.T) {
+	got := render(t, mermaidMD, func(o *Options) { o.Fragment = false; o.ThemeName = "light" })
+	if !strings.Contains(got, `mermaid.initialize({startOnLoad:true,theme:"default"});`) {
+		t.Fatalf("light page should initialize mermaid with the static \"default\" theme, got %q", got)
+	}
+	if strings.Contains(got, "matchMedia") {
+		t.Errorf("explicit light theme shouldn't need matchMedia, got %q", got)
+	}
+}
+
+func TestMermaidSVGBackgroundTransparent(t *testing.T) {
+	got := render(t, mermaidMD, func(o *Options) { o.Fragment = false; o.ThemeName = "dark" })
+	if !strings.Contains(got, ".markdown-body .mermaid svg") || !strings.Contains(got, "background: transparent") {
+		t.Fatalf("page should force the mermaid SVG canvas background transparent, got %q", got)
+	}
+}
+
 func TestRenderPageWriteError(t *testing.T) {
 	doc := renderDoc(t, "# Hi\n")
 	opts := Options{Fragment: false, ThemeName: "light"}
