@@ -149,7 +149,8 @@ func WithThemeOverrides(vars map[string]string) Option {
 	return func(c *config) { c.render.ThemeOverrides = vars }
 }
 
-// WithSourceMap annotates top-level block elements with data-md-line attributes for editor↔preview scroll synchronization.
+// WithSourceMap annotates top-level block elements with data-md-line
+// attributes for editor↔preview scroll synchronization.
 func WithSourceMap() Option {
 	return func(c *config) { c.render.SourceMap = true }
 }

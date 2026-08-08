@@ -99,6 +99,12 @@ const (
 // Document is the root of a parsed tree: its children are the top-level
 // block nodes, alongside decoded front matter and collected footnote
 // definitions.
+//
+// Codec: children are unexported, so plain encoding/json.Marshal on a
+// Document does NOT encode the tree — it sees an empty struct. The only
+// supported codec is document.MarshalJSON / document.UnmarshalJSON (see
+// json.go); Document deliberately implements no json.Marshaler, so there
+// is no hidden Marshaler magic for generic JSON code to stumble into.
 type Document struct {
 	Container
 	Meta      map[string]any // decoded front matter, nil if the document has none

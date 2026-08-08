@@ -8,10 +8,11 @@
 // items (an input on the order of tens of kilobytes) can take tens of
 // seconds to parse. This is parse-time cost inside goldmark, so limiting
 // input *size* does not bound it. Hosts that parse or render untrusted
-// input should enforce a wall-clock timeout around the call (e.g. run it in
-// a goroutine and select against a timer); context-aware Parse/Render
-// variants that support cancellation are on the roadmap. See SECURITY.md
-// for details.
+// input should enforce a wall-clock timeout around the call: the facade
+// package's ParseContext/RenderContext/RenderDocContext are the
+// recommended guard, honoring a caller-supplied context.Context deadline
+// so the call returns promptly even though the abandoned goroutine keeps
+// running underneath. See SECURITY.md for details.
 package parser
 
 import (

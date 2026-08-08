@@ -62,6 +62,14 @@ var alignByName = map[string]Alignment{
 // as {"kind":"<name>",...} objects with lowerCamel fields, zero spans and
 // empty children omitted. Meta values must be JSON-marshalable; YAML
 // timestamps round-trip as RFC 3339 strings.
+//
+// This package-level function — not a Document.MarshalJSON method — is the
+// only supported codec. A plain encoding/json.Marshal(doc) does NOT encode
+// the tree: Document's children are unexported (reachable only through the
+// Node/Container accessors), so the standard encoder sees an empty struct.
+// That is deliberate: Document intentionally implements no json.Marshaler,
+// so there is no hidden Marshaler magic to trip over when it's embedded in
+// or passed through generic JSON-producing code.
 func MarshalJSON(doc *Document) ([]byte, error) {
 	env := &jsonDoc{Version: jsonVersion, Kind: KindDocument.String(), Meta: doc.Meta}
 	env.Span = spanOut(doc.Span())
@@ -135,6 +143,13 @@ func nodeOut(n Node) *jsonNode {
 }
 
 // UnmarshalJSON decodes the v1 wire format produced by MarshalJSON.
+//
+// Forward-compatibility policy: a document produced by a newer library
+// version may contain node kinds this version doesn't know about.
+// UnmarshalJSON fails loudly on any unrecognized kind rather than silently
+// dropping or coercing it — by design, the wire version stays 1 across
+// additive kind growth, so an unknown-kind error is the signal to upgrade,
+// not a version mismatch to work around.
 func UnmarshalJSON(data []byte) (*Document, error) {
 	var env jsonDoc
 	if err := json.Unmarshal(data, &env); err != nil {

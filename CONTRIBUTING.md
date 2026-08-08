@@ -60,6 +60,16 @@ and refreshes `third_party/*/LICENSE`. Commit the resulting
 `assets/*` and `third_party/*/LICENSE` changes together, and update
 `third_party/README.md`'s version table.
 
+`frontMatterFenceTerminated` in `parser/parser.go` mirrors the
+closing-fence grammar of `go.abhg.dev/goldmark/frontmatter` (currently
+pinned at v0.3.0) — it has to independently detect whether a front-matter
+block was actually closed, because upstream's own parse state doesn't
+expose that distinction. Any version bump of that dependency requires
+re-verifying the mirror against upstream's `parse.go` and running the
+canary test in `parser/frontmatter_test.go`
+(`TestUpstreamFrontmatterStillSwallowsUnterminated`), which fails loudly
+if upstream's swallow-on-unterminated behavior ever changes.
+
 ## Developer Certificate of Origin (DCO)
 
 All contributions must be signed off, certifying you wrote the change or
