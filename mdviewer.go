@@ -23,6 +23,16 @@
 // that reads it, or with another mutation — document.Document itself has no
 // internal synchronization.
 //
+// ParseContext/RenderContext/RenderDocContext extend this contract: when
+// ctx ends before the underlying work finishes, the function returns
+// ctx.Err() immediately, but the abandoned goroutine may still be reading
+// src (ParseContext, RenderContext) or doc (RenderDocContext) for an
+// unbounded window afterward — there is no signal for when it actually
+// stops. Getting ctx.Err() back is not a guarantee that those inputs are
+// safe to mutate or reuse; callers must treat src/doc passed to a Context
+// variant as immutable for the lifetime of the call, and must not assume
+// that lifetime has ended just because the call returned.
+//
 // # Resource exhaustion
 //
 // Parse/ParseWith/Render/RenderTo have no built-in wall-clock or work
@@ -218,8 +228,15 @@ func RenderDocTo(w io.Writer, doc *document.Document, opts ...Option) error {
 // first, ParseContext returns ctx.Err() immediately — but the underlying
 // parse continues on its goroutine until it finishes and cannot be
 // stopped (the Markdown engine has no cancellation hooks). The guarantee
-// is bounded caller latency, not reclaimed CPU; see SECURITY.md.
+// is bounded caller latency, not reclaimed CPU; see SECURITY.md. The
+// abandoned goroutine may still be reading src after this function
+// returns, for an unbounded window — do not mutate or reuse src until you
+// can otherwise guarantee that goroutine has finished (see the package's
+// Concurrency section).
 func ParseContext(ctx context.Context, src []byte) (*document.Document, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	type result struct {
 		doc *document.Document
 		err error
@@ -238,8 +255,13 @@ func ParseContext(ctx context.Context, src []byte) (*document.Document, error) {
 }
 
 // RenderContext is Render with caller-side deadline support (same
-// abandonment semantics as ParseContext).
+// abandonment semantics as ParseContext, including that src must not be
+// mutated or reused after a cancelled return until the abandoned
+// goroutine is otherwise known to have finished).
 func RenderContext(ctx context.Context, src []byte, opts ...Option) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	type result struct {
 		out []byte
 		err error
@@ -259,8 +281,15 @@ func RenderContext(ctx context.Context, src []byte, opts ...Option) ([]byte, err
 
 // RenderDocContext is RenderDocTo with caller-side deadline support. The
 // render happens into an internal buffer; w is written only on success,
-// so an abandoned render never touches w after this function returns.
+// so an abandoned render never touches w after this function returns. As
+// with ParseContext/RenderContext, the abandoned goroutine may still be
+// reading doc for an unbounded window after a cancelled return — its CPU
+// is not reclaimed, and doc must not be mutated or reused until you can
+// otherwise guarantee that goroutine has finished; see SECURITY.md.
 func RenderDocContext(ctx context.Context, w io.Writer, doc *document.Document, opts ...Option) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	type result struct {
 		out []byte
 		err error
