@@ -344,7 +344,7 @@ func (t *transformer) convert(n ast.Node) document.Node {
 	case *mathNode:
 		return &document.MathInline{Source: string(n.Source), Display: n.Display}
 	default:
-		return nil // extension nodes handled in Tasks 3-8
+		return nil // unknown/unwired node kinds are dropped
 	}
 }
 

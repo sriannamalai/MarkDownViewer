@@ -30,8 +30,7 @@ func ParseWith(src []byte, cfg Config) (*document.Document, error) {
 	return t.document(root, ctx), nil
 }
 
-// build assembles the goldmark instance for cfg. Extensions are appended
-// here in Tasks 3–8 as they are implemented.
+// build assembles the goldmark instance for cfg.
 func build(cfg Config) goldmark.Markdown {
 	var opts []goldmark.Option
 	if exts := extensions(cfg); len(exts) > 0 {
@@ -40,9 +39,9 @@ func build(cfg Config) goldmark.Markdown {
 	return goldmark.New(opts...)
 }
 
+// extensions assembles the goldmark extension set enabled by cfg.
 func extensions(cfg Config) []goldmark.Extender {
 	var exts []goldmark.Extender
-	// Populated by Tasks 3–8.
 	if cfg.Tables {
 		exts = append(exts, extension.Table)
 	}

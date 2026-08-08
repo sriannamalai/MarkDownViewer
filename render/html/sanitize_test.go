@@ -44,4 +44,7 @@ func TestXSSCorpus(t *testing.T) {
 			}
 		}
 	}
+	if err := sc.Err(); err != nil {
+		t.Fatal(err)
+	}
 }
