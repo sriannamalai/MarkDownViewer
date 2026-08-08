@@ -52,10 +52,33 @@ type Node interface {
 
 // Container is the embeddable base for all nodes; it implements Children
 // and AppendChild via a backing slice.
-type Container struct{ kids []Node }
+type Container struct {
+	kids []Node
+	span Span
+}
 
 func (c *Container) Children() []Node   { return c.kids }
 func (c *Container) AppendChild(n Node) { c.kids = append(c.kids, n) }
+
+// Span returns the node's source location (zero if unknown; see Span).
+func (c *Container) Span() Span { return c.span }
+
+// SetSpan records the node's source location.
+func (c *Container) SetSpan(s Span) { c.span = s }
+
+// Span locates a node in the original Markdown source. Lines are 1-based;
+// offsets are 0-based byte offsets forming the half-open range
+// [StartOffset, EndOffset). The zero Span means "position unknown". In
+// v0.2 only block-level nodes are populated; inline spans are reserved
+// for future use. Offsets are relative to the source AFTER any leading
+// UTF-8 BOM has been stripped.
+type Span struct {
+	StartLine, EndLine     int
+	StartOffset, EndOffset int
+}
+
+// IsZero reports whether the span carries no position information.
+func (s Span) IsZero() bool { return s == Span{} }
 
 // Alignment is a table column's horizontal alignment, taken from its
 // `:---:`-style delimiter-row marker.

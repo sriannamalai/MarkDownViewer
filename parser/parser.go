@@ -58,7 +58,7 @@ func ParseWith(src []byte, cfg Config) (*document.Document, error) {
 	md := build(cfg)
 	ctx := gparser.NewContext()
 	root := md.Parser().Parse(text.NewReader(src), gparser.WithContext(ctx))
-	t := &transformer{src: src, cfg: cfg, slugs: map[string]int{}}
+	t := &transformer{src: src, cfg: cfg, lines: newLineIndex(src), slugs: map[string]int{}}
 	return t.document(root, ctx), nil
 }
 

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -111,9 +112,61 @@ func resolveCharRef(source []byte, start, limit int) ([]byte, int, bool) {
 type transformer struct {
 	src       []byte
 	cfg       Config
+	lines     lineIndex
 	slugs     map[string]int
 	item      *document.ListItem // innermost list item, for task checkboxes
 	footnotes []*document.FootnoteDef
+}
+
+// lineIndex holds the byte offset of every line start; lineIndex[0] == 0.
+type lineIndex []int
+
+func newLineIndex(src []byte) lineIndex {
+	idx := lineIndex{0}
+	for i, b := range src {
+		if b == '\n' {
+			idx = append(idx, i+1)
+		}
+	}
+	return idx
+}
+
+// lineFor returns the 1-based line number containing byte offset off.
+func (li lineIndex) lineFor(off int) int {
+	return sort.Search(len(li), func(i int) bool { return li[i] > off })
+}
+
+// lineStart returns the byte offset of the start of the line containing off.
+func (li lineIndex) lineStart(off int) int {
+	return li[li.lineFor(off)-1]
+}
+
+// leafSpan computes a marker-inclusive span from a block node's Lines().
+func (t *transformer) leafSpan(n ast.Node) document.Span {
+	l := n.Lines()
+	if l.Len() == 0 {
+		return document.Span{}
+	}
+	first, last := l.At(0), l.At(l.Len()-1)
+	start := t.lines.lineStart(first.Start)
+	end := last.Stop
+	endLine := t.lines.lineFor(end - 1)
+	if end <= start {
+		endLine = t.lines.lineFor(start)
+	}
+	return document.Span{
+		StartLine: t.lines.lineFor(start), EndLine: endLine,
+		StartOffset: start, EndOffset: end,
+	}
+}
+
+// setSpan records s on n if n supports it. All document node types embed
+// Container and thus satisfy this, but n is typed as the document.Node
+// interface at call sites, which does not itself expose SetSpan.
+func setSpan(n document.Node, s document.Span) {
+	if sp, ok := n.(interface{ SetSpan(document.Span) }); ok {
+		sp.SetSpan(s)
+	}
 }
 
 func (t *transformer) document(root ast.Node, ctx gparser.Context) *document.Document {
@@ -171,19 +224,24 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		h := &document.Heading{Level: n.Level}
 		t.appendChildren(h, n)
 		h.AnchorID = t.slug(document.PlainText(h))
+		h.SetSpan(t.leafSpan(n))
 		return h
 	case *ast.Paragraph:
 		if t.cfg.Math {
 			if mb := mathBlockFromLines(n, t.src); mb != nil {
+				mb.SetSpan(t.leafSpan(n))
 				return mb
 			}
 		}
 		p := &document.Paragraph{}
 		t.appendChildren(p, n)
+		p.SetSpan(t.leafSpan(n))
 		if t.cfg.Math {
 			if kids := p.Children(); len(kids) == 1 {
 				if mi, ok := kids[0].(*document.MathInline); ok && mi.Display {
-					return &document.MathBlock{Source: mi.Source}
+					mb := &document.MathBlock{Source: mi.Source}
+					mb.SetSpan(p.Span())
+					return mb
 				}
 			}
 		}
@@ -191,6 +249,7 @@ func (t *transformer) convert(n ast.Node) document.Node {
 	case *ast.TextBlock: // tight-list item content; List.Tight drives <p> omission
 		p := &document.Paragraph{}
 		t.appendChildren(p, n)
+		p.SetSpan(t.leafSpan(n))
 		return p
 	case *ast.Blockquote:
 		bq := &document.BlockQuote{}
@@ -217,17 +276,26 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		return li
 	case *ast.FencedCodeBlock:
 		lang := unescapeText(n.Language(t.src))
-		return t.codeOrSpecial(lang, blockLines(n, t.src))
+		out := t.codeOrSpecial(lang, blockLines(n, t.src))
+		setSpan(out, t.leafSpan(n))
+		return out
 	case *ast.CodeBlock:
-		return &document.CodeBlock{Code: blockLines(n, t.src)}
+		cb := &document.CodeBlock{Code: blockLines(n, t.src)}
+		cb.SetSpan(t.leafSpan(n))
+		return cb
 	case *ast.ThematicBreak:
 		return &document.ThematicBreak{}
 	case *ast.HTMLBlock:
 		html := blockLines(n, t.src)
+		span := t.leafSpan(n)
 		if n.HasClosure() {
 			html += string(n.ClosureLine.Value(t.src))
+			span.EndOffset = n.ClosureLine.Stop
+			span.EndLine = t.lines.lineFor(span.EndOffset - 1)
 		}
-		return &document.HTMLBlock{HTML: html}
+		hb := &document.HTMLBlock{HTML: html}
+		hb.SetSpan(span)
+		return hb
 	case *ast.Text:
 		return &document.Text{Value: unescapeText(n.Segment.Value(t.src))}
 	case *ast.String:
