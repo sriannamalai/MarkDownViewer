@@ -18,6 +18,10 @@ import (
 	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
 )
 
+// ResolveKind identifies which kind of target a Resolver is being asked to
+// resolve: a standard link, an image, or a wiki-link.
+type ResolveKind = htmlrender.ResolveKind
+
 // Resolver is a function that rewrites link and image targets. It accepts the
 // resolution kind (link, image, or wiki-link) and target URL, returning the
 // rewritten URL and true if resolution succeeded, or false to fall back to

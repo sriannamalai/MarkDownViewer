@@ -41,6 +41,32 @@ func TestParse(t *testing.T) {
 	}
 }
 
+// TestResolverKindExported is a compile-level guard: ResolveKind must stay
+// exported from the facade so hosts can write an explicitly-typed resolver
+// func literal (Go func literals require named parameter types — a bare
+// package-qualified constant isn't enough). If ResolveKind regresses to
+// unexported, this test file fails to compile.
+func TestResolverKindExported(t *testing.T) {
+	var called bool
+	resolver := func(kind ResolveKind, target string) (string, bool) {
+		called = true
+		if kind == ResolveImage {
+			return "https://cdn.example.com/" + target, true
+		}
+		return "", false
+	}
+	out, err := Render([]byte("![alt](pic.png)\n"), Fragment(), WithResolver(resolver))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("resolver was not invoked")
+	}
+	if !strings.Contains(string(out), `src="https://cdn.example.com/pic.png"`) {
+		t.Fatalf("resolver rewrite not applied, got %q", out)
+	}
+}
+
 func TestThemeCustomization(t *testing.T) {
 	out, _ := Render(
 		[]byte("# Hi\n"),
