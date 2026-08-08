@@ -1,0 +1,62 @@
+[
+  {
+    "markdown": "| Left | Center | Right |\n|:---|:---:|---:|\n| a | b | c |\n| dd | ee | ff |\n",
+    "html": "<table>\n<thead>\n<tr>\n<th align=\"left\">Left</th>\n<th align=\"center\">Center</th>\n<th align=\"right\">Right</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td align=\"left\">a</td>\n<td align=\"center\">b</td>\n<td align=\"right\">c</td>\n</tr>\n<tr>\n<td align=\"left\">dd</td>\n<td align=\"center\">ee</td>\n<td align=\"right\">ff</td>\n</tr>\n</tbody>\n</table>\n",
+    "example": 1
+  },
+  {
+    "markdown": "| A | B |\n|---|---|\n| a \\| b | plain |\n",
+    "html": "<table>\n<thead>\n<tr>\n<th>A</th>\n<th>B</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>a | b</td>\n<td>plain</td>\n</tr>\n</tbody>\n</table>\n",
+    "example": 2
+  },
+  {
+    "markdown": "~~strikethrough~~\n",
+    "html": "<p><del>strikethrough</del></p>\n",
+    "example": 3
+  },
+  {
+    "markdown": "Some **bold** and ~~struck~~ and *em* text.\n",
+    "html": "<p>Some <strong>bold</strong> and <del>struck</del> and <em>em</em> text.</p>\n",
+    "example": 4
+  },
+  {
+    "markdown": "- [ ] todo item\n",
+    "html": "<ul>\n<li><input type=\"checkbox\" disabled /> todo item</li>\n</ul>\n",
+    "example": 5
+  },
+  {
+    "markdown": "- [x] done item\n",
+    "html": "<ul>\n<li><input type=\"checkbox\" checked disabled /> done item</li>\n</ul>\n",
+    "example": 6
+  },
+  {
+    "markdown": "- [x] done\n- [ ] todo\n- normal item\n",
+    "html": "<ul>\n<li><input type=\"checkbox\" checked disabled /> done</li>\n<li><input type=\"checkbox\" disabled /> todo</li>\n<li>normal item</li>\n</ul>\n",
+    "example": 7
+  },
+  {
+    "markdown": "Visit www.example.com today.\n",
+    "html": "<p>Visit <a href=\"http://www.example.com\">www.example.com</a> today.</p>\n",
+    "example": 8
+  },
+  {
+    "markdown": "See https://example.com/path?q=1 for more.\n",
+    "html": "<p>See <a href=\"https://example.com/path?q=1\">https://example.com/path?q=1</a> for more.</p>\n",
+    "example": 9
+  },
+  {
+    "markdown": "Contact me at user@example.com please.\n",
+    "html": "<p>Contact me at <a href=\"mailto:user@example.com\">user@example.com</a> please.</p>\n",
+    "example": 10
+  },
+  {
+    "markdown": "| Name | Code |\n|---|---|\n| **Bold** | `code span` |\n",
+    "html": "<table>\n<thead>\n<tr>\n<th>Name</th>\n<th>Code</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><strong>Bold</strong></td>\n<td><code>code span</code></td>\n</tr>\n</tbody>\n</table>\n",
+    "example": 11
+  },
+  {
+    "markdown": "Combine ~~strike **bold**~~ text.\n",
+    "html": "<p>Combine <del>strike <strong>bold</strong></del> text.</p>\n",
+    "example": 12
+  }
+]

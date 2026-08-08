@@ -6,6 +6,8 @@ import (
 	"io"
 	"strings"
 
+	"github.com/yuin/goldmark/util"
+
 	"github.com/sriannamalai/markdownviewer/document"
 )
 
@@ -76,10 +78,16 @@ func esc(s string) string {
 // default resolution path (wikilink targets get ".md" appended; other
 // destinations pass through unchanged) and is filtered by safeURL exactly
 // as before.
-func (r *writer) href(kind ResolveKind, dest string) string {
+// href resolves dest to an escaped attribute value. The second return value
+// reports whether the href/src attribute should be emitted at all: false
+// means the destination was blocked by policy, which is a different outcome
+// from an empty-but-allowed destination (e.g. "[foo]: <>", CommonMark spec
+// example 200) — the former omits the attribute entirely, the latter emits
+// `href=""`. Callers must not conflate the two by testing the string alone.
+func (r *writer) href(kind ResolveKind, dest string) (string, bool) {
 	if r.opts.Resolver != nil {
 		if u, ok := r.opts.Resolver(kind, dest); ok {
-			return esc(u)
+			return esc(u), true
 		}
 	}
 	u := dest
@@ -87,9 +95,21 @@ func (r *writer) href(kind ResolveKind, dest string) string {
 		u = dest + ".md"
 	}
 	if !r.opts.Unsafe && !safeURL(u) {
-		return ""
+		return "", false
 	}
-	return esc(u)
+	if kind != ResolveWikiLink {
+		// Percent-encode the destination to match the CommonMark reference
+		// HTML output. Wikilink targets are excluded: they're a filesystem
+		// path resolved by the host, not a URI, and encoding would corrupt
+		// e.g. spaces in page names (see TestWikiLinkDefaultResolution).
+		// Backslash-escapes and entity references in ordinary link/image
+		// destinations are already decoded by the parser (transform.go); for
+		// autolinks — where CommonMark forbids that decoding — the raw text
+		// flows through untouched, so this call only ever adds percent-
+		// encoding, never a second decode pass.
+		u = string(util.URLEscape([]byte(u), false))
+	}
+	return esc(u), true
 }
 
 func (r *writer) block(n document.Node, tight bool) {
@@ -151,7 +171,7 @@ func (r *writer) block(n document.Node, tight bool) {
 	case *document.Table:
 		r.table(n)
 	case *document.ThematicBreak:
-		r.raw("<hr>\n")
+		r.raw("<hr />\n")
 	case *document.HTMLBlock:
 		r.rawHTML(n.HTML, true)
 	case *document.DefinitionList:
@@ -187,20 +207,47 @@ func (r *writer) inlines(n document.Node) {
 
 func (r *writer) listItem(li *document.ListItem, tight bool) {
 	kids := li.Children()
+	// A list item with no block content at all renders as the bare
+	// "<li></li>", with none of the internal newlines either branch below
+	// would otherwise add (CommonMark spec example 315).
+	if len(kids) == 0 && !li.Task {
+		r.raw("<li></li>\n")
+		return
+	}
 	if tight {
 		r.raw("<li>")
 		if li.Task {
 			r.checkbox(li.Checked)
 		}
+		// In a tight list, every Paragraph child (not just the first — a
+		// heading or nested list may precede a trailing paragraph, spec
+		// example 300) is inlined without a <p> wrapper. Every other block
+		// type renders normally and, like all of r.block's output, ends
+		// with its own trailing "\n".
+		//
+		// A leading "\n" is needed before child i exactly when the
+		// previously written output doesn't already end in one: that's the
+		// case for i==0 when the first child isn't a paragraph (nothing
+		// has been written since "<li>" yet), and for i>0 when the
+		// previous child WAS an inlined paragraph (which, unlike a block,
+		// leaves no trailing newline behind).
+		prevInlinedParagraph := false
 		for i, c := range kids {
-			if p, ok := c.(*document.Paragraph); ok && i == 0 {
-				r.inlines(p)
-				continue
-			}
+			p, isParagraph := c.(*document.Paragraph)
 			if i == 0 {
+				if !isParagraph {
+					r.raw("\n")
+				}
+			} else if prevInlinedParagraph {
 				r.raw("\n")
 			}
+			if isParagraph {
+				r.inlines(p)
+				prevInlinedParagraph = true
+				continue
+			}
 			r.block(c, false)
+			prevInlinedParagraph = false
 		}
 		r.raw("</li>\n")
 		return
@@ -215,9 +262,9 @@ func (r *writer) listItem(li *document.ListItem, tight bool) {
 
 func (r *writer) checkbox(checked bool) {
 	if checked {
-		r.raw(`<input type="checkbox" checked disabled> `)
+		r.raw(`<input type="checkbox" checked disabled /> `)
 	} else {
-		r.raw(`<input type="checkbox" disabled> `)
+		r.raw(`<input type="checkbox" disabled /> `)
 	}
 }
 
@@ -301,7 +348,7 @@ func (r *writer) inline(n document.Node) {
 	case *document.SoftBreak:
 		r.raw("\n")
 	case *document.HardBreak:
-		r.raw("<br>\n")
+		r.raw("<br />\n")
 	case *document.Emphasis:
 		r.raw("<em>")
 		r.inlines(n)
@@ -319,7 +366,7 @@ func (r *writer) inline(n document.Node) {
 		r.text(n.Value)
 		r.raw("</code>")
 	case *document.Link:
-		if u := r.href(ResolveLink, n.Destination); u != "" {
+		if u, ok := r.href(ResolveLink, n.Destination); ok {
 			t := ""
 			if n.Title != "" {
 				t = ` title="` + esc(n.Title) + `"`
@@ -331,14 +378,14 @@ func (r *writer) inline(n document.Node) {
 		r.inlines(n)
 		r.raw("</a>")
 	case *document.Image:
-		u := r.href(ResolveImage, n.Destination)
+		u, _ := r.href(ResolveImage, n.Destination) // blocked destinations still get a (empty) src, like a real <img>
 		t := ""
 		if n.Title != "" {
 			t = ` title="` + esc(n.Title) + `"`
 		}
-		r.raw(`<img src="` + u + `" alt="` + esc(n.Alt) + `"` + t + ">")
+		r.raw(`<img src="` + u + `" alt="` + esc(n.Alt) + `"` + t + " />")
 	case *document.WikiLink:
-		if u := r.href(ResolveWikiLink, n.Target); u != "" {
+		if u, ok := r.href(ResolveWikiLink, n.Target); ok {
 			r.raw(`<a href="` + u + `" class="wikilink">`)
 		} else {
 			r.raw(`<a class="wikilink">`)

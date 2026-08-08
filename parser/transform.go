@@ -1,17 +1,107 @@
 package parser
 
 import (
+	"strconv"
 	"strings"
 
 	emast "github.com/yuin/goldmark-emoji/ast"
 	"github.com/yuin/goldmark/ast"
 	east "github.com/yuin/goldmark/extension/ast"
 	gparser "github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/util"
 	"go.abhg.dev/goldmark/frontmatter"
 	"go.abhg.dev/goldmark/wikilink"
 
 	"github.com/sriannamalai/markdownviewer/document"
 )
+
+// unescapeText decodes backslash-escaped ASCII punctuation and HTML entity /
+// numeric character references, e.g. `\*` -> `*`, `&amp;` -> `&`,
+// `&#35;` -> `#`. It applies to plain inline text, link/image titles and
+// destinations, and code-fence info strings — everywhere CommonMark treats
+// backslash escapes and character references as live syntax.
+//
+// It deliberately does NOT apply inside code spans, code blocks, raw HTML,
+// or autolink destinations/labels: the spec keeps those literal, and
+// transform.go only calls it from the sites where decoding is required.
+//
+// This mirrors the decoding goldmark's own HTML Writer performs at render
+// time (see (goldmark/renderer/html).Writer.Write), and must run as a
+// single left-to-right pass rather than two independent passes (unescape,
+// then resolve entities): a backslash-escaped "&" (`\&ouml;`) must produce
+// a literal "&" that is NOT then reinterpreted as the start of an entity
+// reference. CommonMark spec example 14 covers exactly this case. A
+// two-pass unescape-then-resolve implementation gets it wrong because the
+// escaped "&" is indistinguishable from a literal one by the time the
+// entity pass runs.
+func unescapeText(source []byte) string {
+	n := len(source)
+	var b strings.Builder
+	b.Grow(n)
+	for i := 0; i < n; {
+		c := source[i]
+		if c == '\\' && i+1 < n && util.IsPunct(source[i+1]) {
+			b.WriteByte(source[i+1])
+			i += 2
+			continue
+		}
+		if c == '&' {
+			if resolved, end, ok := resolveCharRef(source, i, n); ok {
+				b.Write(resolved)
+				i = end
+				continue
+			}
+		}
+		b.WriteByte(c)
+		i++
+	}
+	return b.String()
+}
+
+// resolveCharRef attempts to parse an HTML character reference (numeric,
+// e.g. "&#35;"/"&#x23;", or named, e.g. "&amp;") starting at source[start]
+// (source[start] == '&'). On success it returns the decoded UTF-8 bytes and
+// the index just past the reference's trailing ';'.
+func resolveCharRef(source []byte, start, limit int) ([]byte, int, bool) {
+	next := start + 1
+	if next >= limit {
+		return nil, 0, false
+	}
+	if source[next] == '#' {
+		nnext := next + 1
+		if nnext >= limit {
+			return nil, 0, false
+		}
+		if c := source[nnext]; c == 'x' || c == 'X' {
+			numStart := nnext + 1
+			end, ok := util.ReadWhile(source, [2]int{numStart, limit}, util.IsHexDecimal)
+			if !ok || end >= limit || source[end] != ';' || end == numStart {
+				return nil, 0, false
+			}
+			v, _ := strconv.ParseUint(string(source[numStart:end]), 16, 32)
+			return []byte(string(util.ToValidRune(rune(v)))), end + 1, true
+		}
+		if c := source[nnext]; c >= '0' && c <= '9' {
+			numStart := nnext
+			end, ok := util.ReadWhile(source, [2]int{numStart, limit}, util.IsNumeric)
+			if !ok || end-numStart >= 8 || end >= limit || source[end] != ';' {
+				return nil, 0, false
+			}
+			v, _ := strconv.ParseUint(string(source[numStart:end]), 10, 32)
+			return []byte(string(util.ToValidRune(rune(v)))), end + 1, true
+		}
+		return nil, 0, false
+	}
+	end, ok := util.ReadWhile(source, [2]int{next, limit}, util.IsAlphaNumeric)
+	if !ok || end >= limit || source[end] != ';' {
+		return nil, 0, false
+	}
+	entity, ok := util.LookUpHTML5EntityByName(string(source[next:end]))
+	if !ok {
+		return nil, 0, false
+	}
+	return entity.Characters, end + 1, true
+}
 
 type transformer struct {
 	src       []byte
@@ -121,7 +211,7 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		t.item = prev
 		return li
 	case *ast.FencedCodeBlock:
-		lang := string(n.Language(t.src))
+		lang := unescapeText(n.Language(t.src))
 		return t.codeOrSpecial(lang, blockLines(n, t.src))
 	case *ast.CodeBlock:
 		return &document.CodeBlock{Code: blockLines(n, t.src)}
@@ -134,7 +224,7 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		}
 		return &document.HTMLBlock{HTML: html}
 	case *ast.Text:
-		return &document.Text{Value: string(n.Segment.Value(t.src))}
+		return &document.Text{Value: unescapeText(n.Segment.Value(t.src))}
 	case *ast.String:
 		return &document.Text{Value: string(n.Value)}
 	case *ast.Emphasis:
@@ -149,10 +239,19 @@ func (t *transformer) convert(n ast.Node) document.Node {
 	case *ast.CodeSpan:
 		return &document.CodeSpan{Value: spanText(n, t.src)}
 	case *ast.Link:
-		l := &document.Link{Destination: string(n.Destination), Title: string(n.Title)}
+		// Destination/Title are decoded here (backslash escapes, entity and
+		// numeric character references); see unescapeText. Percent-encoding
+		// for the URL is deferred to the HTML renderer (render/html), which
+		// is the only layer that needs a URI-safe string — other consumers
+		// of the document model want the human-readable destination.
+		l := &document.Link{Destination: unescapeText(n.Destination), Title: unescapeText(n.Title)}
 		t.appendChildren(l, n)
 		return l
 	case *ast.AutoLink:
+		// Deliberately not passed through unescapeText: CommonMark does not
+		// recognize backslash escapes or entity references inside autolinks
+		// (spec.commonmark.org/0.31.2/#autolinks), so the destination and
+		// visible label stay exactly as written between < and >.
 		url := string(n.URL(t.src))
 		if n.AutoLinkType == ast.AutoLinkEmail && !strings.HasPrefix(url, "mailto:") {
 			url = "mailto:" + url
@@ -161,7 +260,7 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		l.AppendChild(&document.Text{Value: string(n.Label(t.src))})
 		return l
 	case *ast.Image:
-		img := &document.Image{Destination: string(n.Destination), Title: string(n.Title)}
+		img := &document.Image{Destination: unescapeText(n.Destination), Title: unescapeText(n.Title)}
 		t.appendChildren(img, n)
 		img.Alt = document.PlainText(img)
 		return img
@@ -339,6 +438,13 @@ func blockLines(n ast.Node, src []byte) string {
 	return b.String()
 }
 
+// spanText concatenates a code span's raw child segments. Backslash escapes
+// and entity references are deliberately left alone — code spans are the
+// one CommonMark inline construct where both stay literal — but per the
+// spec, "line endings are converted to spaces" within a code span (the
+// leading/trailing single-space trim goldmark's own code-span parser
+// already applies directly to the segments, so only the newline-to-space
+// conversion is left to do here).
 func spanText(n ast.Node, src []byte) string {
 	var b strings.Builder
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
@@ -346,5 +452,8 @@ func spanText(n ast.Node, src []byte) string {
 			b.Write(txt.Segment.Value(src))
 		}
 	}
-	return b.String()
+	s := b.String()
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\n", " ")
+	return s
 }

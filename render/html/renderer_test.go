@@ -117,7 +117,7 @@ func TestResolverDeclineFallsBackToDefaultFiltering(t *testing.T) {
 
 func TestTaskListCheckboxes(t *testing.T) {
 	got := render(t, "- [x] done\n", nil)
-	if !strings.Contains(got, `<input type="checkbox" checked disabled>`) {
+	if !strings.Contains(got, `<input type="checkbox" checked disabled />`) {
 		t.Fatalf("got %q", got)
 	}
 }
