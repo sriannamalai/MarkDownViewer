@@ -10,38 +10,38 @@ type Kind int
 const (
 	// Values are pinned — a serialization/FFI compatibility contract.
 	// Never renumber; append only.
-	KindDocument Kind = iota
-	KindHeading
-	KindParagraph
-	KindBlockQuote
-	KindAdmonition
-	KindList
-	KindListItem
-	KindCodeBlock
-	KindDiagram
-	KindMathBlock
-	KindTable
-	KindTableRow
-	KindTableCell
-	KindThematicBreak
-	KindHTMLBlock
-	KindDefinitionList
-	KindDefinitionTerm
-	KindDefinitionDesc
-	KindFootnoteDef
-	KindText
-	KindSoftBreak
-	KindHardBreak
-	KindEmphasis
-	KindStrong
-	KindStrikethrough
-	KindCodeSpan
-	KindLink
-	KindImage
-	KindWikiLink
-	KindMathInline
-	KindHTMLInline
-	KindFootnoteRef
+	KindDocument       Kind = 0
+	KindHeading        Kind = 1
+	KindParagraph      Kind = 2
+	KindBlockQuote     Kind = 3
+	KindAdmonition     Kind = 4
+	KindList           Kind = 5
+	KindListItem       Kind = 6
+	KindCodeBlock      Kind = 7
+	KindDiagram        Kind = 8
+	KindMathBlock      Kind = 9
+	KindTable          Kind = 10
+	KindTableRow       Kind = 11
+	KindTableCell      Kind = 12
+	KindThematicBreak  Kind = 13
+	KindHTMLBlock      Kind = 14
+	KindDefinitionList Kind = 15
+	KindDefinitionTerm Kind = 16
+	KindDefinitionDesc Kind = 17
+	KindFootnoteDef    Kind = 18
+	KindText           Kind = 19
+	KindSoftBreak      Kind = 20
+	KindHardBreak      Kind = 21
+	KindEmphasis       Kind = 22
+	KindStrong         Kind = 23
+	KindStrikethrough  Kind = 24
+	KindCodeSpan       Kind = 25
+	KindLink           Kind = 26
+	KindImage          Kind = 27
+	KindWikiLink       Kind = 28
+	KindMathInline     Kind = 29
+	KindHTMLInline     Kind = 30
+	KindFootnoteRef    Kind = 31
 )
 
 // Node is a member of the document tree. Every concrete type in this
