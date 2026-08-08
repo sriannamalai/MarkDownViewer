@@ -1,0 +1,109 @@
+package parser
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/sriannamalai/markdownviewer/document"
+)
+
+func assertDoc(t *testing.T, src, want string) {
+	t.Helper()
+	doc, err := Parse([]byte(src))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	got := strings.TrimSpace(document.Dump(doc))
+	want = strings.TrimSpace(want)
+	if got != want {
+		t.Fatalf("tree mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestHeadingParagraph(t *testing.T) {
+	assertDoc(t, "## Hello\n\nSome *em* **strong** `code`.\n", `
+Document
+  Heading[2] id="hello"
+    Text "Hello"
+  Paragraph
+    Text "Some "
+    Emphasis
+      Text "em"
+    Text " "
+    Strong
+      Text "strong"
+    Text " "
+    CodeSpan "code"
+    Text "."
+`)
+}
+
+func TestLinkImage(t *testing.T) {
+	assertDoc(t, `[go](https://go.dev "Go") ![alt text](img.png)`, `
+Document
+  Paragraph
+    Link dest="https://go.dev" title="Go"
+      Text "go"
+    Text " "
+    Image dest="img.png" alt="alt text" title=""
+      Text "alt text"
+`)
+}
+
+func TestListsTightLoose(t *testing.T) {
+	assertDoc(t, "- a\n- b\n", `
+Document
+  List ordered=false start=1 tight=true
+    ListItem
+      Paragraph
+        Text "a"
+    ListItem
+      Paragraph
+        Text "b"
+`)
+	assertDoc(t, "1. a\n\n2. b\n", `
+Document
+  List ordered=true start=1 tight=false
+    ListItem
+      Paragraph
+        Text "a"
+    ListItem
+      Paragraph
+        Text "b"
+`)
+}
+
+func TestCodeBlockQuoteBreaks(t *testing.T) {
+	assertDoc(t, "> quote\n\n```go\nx := 1\n```\n\n---\n", `
+Document
+  BlockQuote
+    Paragraph
+      Text "quote"
+  CodeBlock lang="go" "x := 1\n"
+  ThematicBreak
+`)
+}
+
+func TestHardSoftBreaks(t *testing.T) {
+	assertDoc(t, "line one\nline two  \nline three\n", `
+Document
+  Paragraph
+    Text "line one"
+    SoftBreak
+    Text "line two"
+    HardBreak
+    Text "line three"
+`)
+}
+
+func TestRawHTML(t *testing.T) {
+	assertDoc(t, "<div>\nblock\n</div>\n\npara <em>inline</em>\n", `
+Document
+  HTMLBlock "<div>\nblock\n</div>\n"
+  Paragraph
+    Text "para "
+    HTMLInline "<em>"
+    Text "inline"
+    HTMLInline "</em>"
+`)
+}
