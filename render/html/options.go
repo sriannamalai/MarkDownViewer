@@ -26,7 +26,7 @@ type Options struct {
 	Math           bool   // KaTeX math support
 	HeadingAnchors bool   // id attributes on headings
 	Resolver       Resolver
-	ThemeOverrides map[string]string // CSS custom-property overrides (name → value); emitted into the page's <style> element with </style sequences stripped defensively
+	ThemeOverrides map[string]string // CSS custom-property overrides (name → value); keys must match --[a-zA-Z0-9_-]+, non-conforming keys silently dropped; values emitted into the page's <style> element with </style sequences stripped defensively
 	Stylesheet     string            // non-empty replaces theme.BaseCSS() entirely; emitted into the page's <style> element with </style sequences stripped defensively
 }
 

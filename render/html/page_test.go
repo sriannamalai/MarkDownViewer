@@ -130,3 +130,30 @@ func TestThemeOverridesBreakoutPrevention(t *testing.T) {
 		t.Error("override value base should be preserved")
 	}
 }
+
+func TestThemeOverrideKeyValidation(t *testing.T) {
+	got := render(t, "# Hi\n", func(o *Options) {
+		o.Fragment = false
+		o.ThemeName = "light"
+		o.ThemeOverrides = map[string]string{
+			"--md</style><script>x": "red",  // malicious key
+			"--md-valid-key":        "blue", // valid key
+		}
+	})
+	// Verify exactly one </style> (the real one)
+	if strings.Count(got, "</style>") != 1 {
+		t.Error("page should contain exactly one </style> closing tag")
+	}
+	// Verify no script tags
+	if strings.Contains(got, "<script>") {
+		t.Error("no script tags should be present")
+	}
+	// Verify malicious key text does not appear
+	if strings.Contains(got, "--md</style><script>") {
+		t.Error("malicious key should not appear in output")
+	}
+	// Verify valid key is emitted
+	if !strings.Contains(got, "--md-valid-key:blue") {
+		t.Error("valid key should be emitted")
+	}
+}

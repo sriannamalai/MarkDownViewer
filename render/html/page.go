@@ -3,6 +3,7 @@ package htmlrender
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/sriannamalai/markdownviewer/internal/assets"
 	"github.com/sriannamalai/markdownviewer/theme"
 )
+
+var validCustomPropertyRe = regexp.MustCompile(`^--[a-zA-Z0-9_-]+$`)
 
 // usesFeatures reports whether doc contains any diagram or math nodes, so
 // the page only pays for mermaid/KaTeX assets when it actually needs them.
@@ -42,13 +45,19 @@ func sanitizeCSS(s string) string {
 }
 
 // emitThemeOverrides emits CSS custom-property overrides in sorted key order.
+// Keys must match the pattern --[a-zA-Z0-9_-]+; non-conforming keys are silently dropped.
 func emitThemeOverrides(overrides map[string]string) string {
 	if len(overrides) == 0 {
 		return ""
 	}
 	keys := make([]string, 0, len(overrides))
 	for k := range overrides {
-		keys = append(keys, k)
+		if validCustomPropertyRe.MatchString(k) {
+			keys = append(keys, k)
+		}
+	}
+	if len(keys) == 0 {
+		return ""
 	}
 	sort.Strings(keys)
 	var b strings.Builder
