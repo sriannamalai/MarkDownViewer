@@ -73,6 +73,47 @@ func TestRelativeFragmentAndHTTPSKeepWorking(t *testing.T) {
 	}
 }
 
+// TestEntityEncodedSchemeBypassRendersWithoutHref pins the ordering between
+// character-reference decoding (parser/transform.go's unescapeText, applied
+// to link destinations before they ever reach the renderer) and the
+// safeURL scheme check in href() (render/html/renderer.go): decoding must
+// happen BEFORE the safeURL check runs, or an attacker can hide a blocked
+// scheme like "javascript:" behind an HTML entity or character reference
+// and have it slip through as an "unknown"/unparseable scheme.
+//
+// Nothing else in the suite exercises this ordering: both TestCommonMarkSpec
+// and TestGFMExtras render with Options.Unsafe=true, where safeURL is
+// never even consulted, so safeURL had zero conformance coverage prior to
+// this test. All three cases are expected to be blocked (no href
+// attribute) under the default (Unsafe=false) policy, exactly like the
+// unencoded "javascript:alert(1)" case in TestUnsafeURLsStripped.
+func TestEntityEncodedSchemeBypassRendersWithoutHref(t *testing.T) {
+	cases := []struct {
+		name string
+		md   string
+	}{
+		// "&#106;" is a decimal character reference for 'j'.
+		{"decimal-char-ref-in-scheme", "[a](&#106;avascript:alert(1))\n"},
+		// A literal tab is a known bypass for naive prefix blocklists
+		// (browsers strip control chars before parsing the scheme); this
+		// checks the same bypass still works when the tab arrives via
+		// "&#9;" (decimal character reference) instead of a raw byte.
+		{"decimal-char-ref-tab-in-scheme", "[a](jav&#9;ascript:x)\n"},
+		// "&NewLine;" is a named HTML5 entity for a literal newline —
+		// same control-character bypass, via a named reference instead of
+		// a numeric one.
+		{"named-entity-newline-in-scheme", "[a](java&NewLine;script:x)\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := render(t, c.md, nil)
+			if strings.Contains(got, "href=") {
+				t.Fatalf("entity-encoded javascript: scheme should not produce an href: %q", got)
+			}
+		})
+	}
+}
+
 func TestUnsafeModeBypassesURLPolicy(t *testing.T) {
 	got := render(t, "[x](steam://run)\n", func(o *Options) { o.Unsafe = true })
 	if !strings.Contains(got, `href="steam://run"`) {

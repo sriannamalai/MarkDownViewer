@@ -75,7 +75,12 @@ func resolveCharRef(source []byte, start, limit int) ([]byte, int, bool) {
 		if c := source[nnext]; c == 'x' || c == 'X' {
 			numStart := nnext + 1
 			end, ok := util.ReadWhile(source, [2]int{numStart, limit}, util.IsHexDecimal)
-			if !ok || end >= limit || source[end] != ';' || end == numStart {
+			// CommonMark's numeric character reference grammar caps hex
+			// references at 6 hex digits (mirroring the 7-digit cap on the
+			// decimal branch below): a 7th digit means this isn't a valid
+			// reference at all, so it — and the "&#x" that looked like it
+			// was introducing one — stays literal.
+			if !ok || end-numStart >= 7 || end >= limit || source[end] != ';' || end == numStart {
 				return nil, 0, false
 			}
 			v, _ := strconv.ParseUint(string(source[numStart:end]), 16, 32)
