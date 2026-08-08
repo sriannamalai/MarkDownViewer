@@ -1,13 +1,16 @@
 package document
 
+// WalkStatus is a Visitor's instruction to Walk about how to proceed.
 type WalkStatus int
 
 const (
-	Continue WalkStatus = iota
-	SkipChildren
-	Stop
+	Continue     WalkStatus = iota // proceed normally
+	SkipChildren                   // (enter only) skip the current node's subtree
+	Stop                           // abort the walk entirely
 )
 
+// Visitor is called once on entering and once on leaving each node visited
+// by Walk; entering distinguishes the two calls.
 type Visitor func(n Node, entering bool) WalkStatus
 
 // Walk visits n and its descendants depth-first, calling visit on enter and

@@ -14,10 +14,14 @@ import (
 	"github.com/sriannamalai/markdownviewer/document"
 )
 
+// Parse converts Markdown source into a document.Document using Default's
+// extension set.
 func Parse(src []byte) (*document.Document, error) {
 	return ParseWith(src, Default())
 }
 
+// ParseWith converts Markdown source into a document.Document using the
+// syntax extensions selected by cfg.
 func ParseWith(src []byte, cfg Config) (*document.Document, error) {
 	md := build(cfg)
 	ctx := gparser.NewContext()

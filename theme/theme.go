@@ -12,14 +12,20 @@ import (
 //go:embed base.css
 var baseCSS string
 
+// BaseCSS returns the theme-agnostic base stylesheet shared by all themes;
+// a Theme layers its CSS custom properties on top of it.
 func BaseCSS() string { return baseCSS }
 
+// Theme is a named set of CSS custom-property values, paired with a chroma
+// syntax-highlight style, that together give a rendered page its visual
+// appearance over BaseCSS.
 type Theme struct {
-	Name        string
-	Vars        map[string]string
-	ChromaStyle string // paired chroma syntax-highlight style
+	Name        string            // theme name, e.g. "light" or "dark"
+	Vars        map[string]string // CSS custom-property values, keyed by property name (e.g. "--md-bg")
+	ChromaStyle string            // paired chroma syntax-highlight style
 }
 
+// Light returns the built-in light theme.
 func Light() Theme {
 	return Theme{Name: "light", ChromaStyle: "github", Vars: map[string]string{
 		"--md-bg": "#ffffff", "--md-fg": "#1f2328", "--md-accent": "#0969da",
@@ -27,6 +33,7 @@ func Light() Theme {
 	}}
 }
 
+// Dark returns the built-in dark theme.
 func Dark() Theme {
 	return Theme{Name: "dark", ChromaStyle: "github-dark", Vars: map[string]string{
 		"--md-bg": "#0d1117", "--md-fg": "#e6edf3", "--md-accent": "#4493f8",
