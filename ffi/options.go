@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 
 	markdownviewer "github.com/sriannamalai/markdownviewer"
 )
@@ -40,6 +41,9 @@ func decodeOptions(data []byte) (ffiOptions, error) {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&o); err != nil {
 		return ffiOptions{}, fmt.Errorf("options: %w", err)
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return ffiOptions{}, fmt.Errorf("options: trailing data after the options object")
 	}
 	if o.Version != nil && *o.Version != 1 {
 		return ffiOptions{}, fmt.Errorf("options: unsupported version %d (want 1)", *o.Version)

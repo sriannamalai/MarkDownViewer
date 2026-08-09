@@ -44,13 +44,13 @@ int main(void) {
 
     /* Fragment option changes output. */
     char *frag = NULL, *err4 = NULL; size_t frag_len = 0;
-    rc = mdv_render((char *)md, md_len, "{\"fragment\": true}", &frag, &frag_len, &err4);
+    rc = mdv_render((char *)md, md_len, (char *)"{\"fragment\": true}", &frag, &frag_len, &err4);
     CHECK(rc == 0 && frag != NULL, "mdv_render with options succeeds");
     CHECK(frag != NULL && strstr(frag, "<html") == NULL, "fragment output has no <html");
 
     /* Error paths. */
     char *out = NULL, *bad_err = NULL; size_t out_len = 0;
-    rc = mdv_render((char *)md, md_len, "{\"bogus\": 1}", &out, &out_len, &bad_err);
+    rc = mdv_render((char *)md, md_len, (char *)"{\"bogus\": 1}", &out, &out_len, &bad_err);
     CHECK(rc != 0 && out == NULL, "unknown option field fails");
     CHECK(bad_err != NULL && strstr(bad_err, "bogus") != NULL, "error names the bad field");
     mdv_free(bad_err); bad_err = NULL;
@@ -64,7 +64,7 @@ int main(void) {
     mdv_free(out); out = NULL;
 
     char *doc_bad_err = NULL;
-    rc = mdv_render_doc("{", 1, NULL, &out, &out_len, &doc_bad_err);
+    rc = mdv_render_doc((char *)"{", 1, NULL, &out, &out_len, &doc_bad_err);
     CHECK(rc != 0 && doc_bad_err != NULL, "invalid document JSON fails");
     mdv_free(doc_bad_err);
 

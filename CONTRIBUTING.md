@@ -78,8 +78,9 @@ by the script). The C harness is the ABI's test suite:
 
 ```bash
 DIR="dist/ffi/$(go env GOOS)-$(go env GOARCH)"
-cc examples/c/harness.c -I"$DIR" -L"$DIR" -lmdviewer -o harness
+gcc examples/c/harness.c -I"$DIR" -L"$DIR" -lmdviewer -o harness
 DYLD_LIBRARY_PATH="$DIR" ./harness   # LD_LIBRARY_PATH on Linux
+# on Windows (Git Bash): PATH="$DIR:$PATH" ./harness.exe
 ```
 
 CI builds the library and runs the harness on all three OSes. If you

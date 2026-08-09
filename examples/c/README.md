@@ -9,7 +9,9 @@ From the repository root:
 
     ./scripts/build-ffi.sh
     DIR="dist/ffi/$(go env GOOS)-$(go env GOARCH)"
-    cc examples/c/harness.c -I"$DIR" -L"$DIR" -lmdviewer -o harness
+    gcc examples/c/harness.c -I"$DIR" -L"$DIR" -lmdviewer -o harness
+
+`gcc` resolves on all three platforms (on macOS it is the clang shim; on Windows use MinGW gcc from Git Bash) — any C99 compiler works.
 
 Then run it with the library directory on the loader path:
 

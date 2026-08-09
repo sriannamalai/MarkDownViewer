@@ -85,3 +85,13 @@ func TestToFacadeOptionsCount(t *testing.T) {
 		t.Errorf("empty theme: want 0 options, got %d", n)
 	}
 }
+
+func TestDecodeOptionsTrailingData(t *testing.T) {
+	_, err := decodeOptions([]byte(`{"theme": "dark"} {"bogus": 1}`))
+	if err == nil || !strings.Contains(err.Error(), "trailing") {
+		t.Fatalf("want trailing-data error, got %v", err)
+	}
+	if _, err := decodeOptions([]byte("{\"theme\": \"dark\"}\n  ")); err != nil {
+		t.Fatalf("trailing whitespace should be fine: %v", err)
+	}
+}

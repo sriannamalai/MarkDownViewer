@@ -22,9 +22,10 @@ Five symbols. All functions are thread-safe.
 
 Return 0 = success. On success the out-buffer is UTF-8 with an uncounted
 trailing NUL; on failure the return is non-zero and `err` holds a message.
-An unexpected internal failure (including an allocation failure) is
-reported the same way, with a message prefixed `panic:` — it never
-unwinds into the host process.
+An unexpected internal failure is reported the same way, with a message
+prefixed `panic:` — it never unwinds into the host process. The one
+exception is true out-of-memory: like the Go runtime itself, the library
+aborts if C `malloc` fails.
 **Every returned buffer must be freed with `mdv_free`** (not plain `free`).
 `mdv_parse` emits a versioned document-AST JSON; feeding it back through
 `mdv_render_doc` lets you parse once and re-render many times (e.g. theme

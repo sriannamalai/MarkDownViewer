@@ -53,9 +53,10 @@ func goOpts(p *C.char) []byte {
 }
 
 // cBuf copies b into a C-malloc'd buffer with a trailing NUL (not counted
-// in the returned length). The caller owns the buffer (mdv_free). Returns
-// an error if the allocation fails; cgo's malloc wrapper panics rather
-// than returning NULL, which call turns into the same error result.
+// in the returned length). The caller owns the buffer (mdv_free). The nil
+// check is defense-in-depth only: cgo's malloc wrapper never returns NULL —
+// on true allocation failure it aborts the process with an unrecoverable
+// runtime throw (not a panic), so no error path can observe it.
 func cBuf(b []byte) (*C.char, C.size_t, error) {
 	n := len(b)
 	p := C.malloc(C.size_t(n + 1))
@@ -70,10 +71,11 @@ func cBuf(b []byte) (*C.char, C.size_t, error) {
 }
 
 // call runs f and marshals its result or error into the out-parameters.
-// Returns 0 on success, 1 on error. A panic anywhere below this point —
-// in the operation itself or in the cgo allocation wrappers, which abort
-// instead of returning NULL — is converted into an error result so it
-// cannot unwind through the exported entry point and kill the host.
+// Returns 0 on success, 1 on error. A Go panic anywhere below this point
+// is converted into an error result so it cannot unwind through the
+// exported entry point and kill the host. This does not cover C
+// allocation failure: cgo's malloc wrapper aborts the process via an
+// unrecoverable runtime throw, not a panic.
 func call(out **C.char, outLen *C.size_t, outErr **C.char, f func() ([]byte, error)) (code C.int) {
 	if outErr != nil {
 		*outErr = nil
