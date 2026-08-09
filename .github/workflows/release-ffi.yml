@@ -11,7 +11,10 @@ jobs:
       matrix:
         include:
           - {os: macos-14, target: darwin-arm64}
-          - {os: macos-13, target: darwin-amd64}
+          # No Intel macOS hosted runners exist anymore (macos-13 retired
+          # 2025-12); cross-compile on Apple Silicon instead — Apple's
+          # toolchain targets x86_64 natively via `clang -arch x86_64`.
+          - {os: macos-14, target: darwin-amd64, goarch: amd64, cc: clang -arch x86_64}
           - {os: ubuntu-latest, target: linux-amd64}
           - {os: ubuntu-24.04-arm, target: linux-arm64}
           - {os: windows-latest, target: windows-amd64}
@@ -23,12 +26,18 @@ jobs:
         with: {ref: '${{ github.event.release.tag_name }}'}
       - uses: actions/setup-go@v6
         with: {go-version: '1.26.x'}
-      - run: VERSION="$TAG" ./scripts/build-ffi.sh
+      # Empty GOARCH/CC (targets without matrix overrides) are treated as
+      # unset by the Go toolchain, so the native build is unaffected.
+      - name: Build
+        env:
+          GOARCH: ${{ matrix.goarch }}
+          CC: ${{ matrix.cc }}
+        run: VERSION="$TAG" ./scripts/build-ffi.sh
       - name: Package
         run: |
           ver="${TAG#v}"
           dir="dist/ffi/${{ matrix.target }}"
-          test -d "$dir"   # target must match the runner's native GOOS-GOARCH
+          test -d "$dir"   # target must match the build's GOOS-GOARCH output
           zip="libmdviewer-${ver}-${{ matrix.target }}.zip"
           cp LICENSE ffi/README.md "$dir"/
           if [[ "${{ matrix.target }}" == windows-* ]]; then
