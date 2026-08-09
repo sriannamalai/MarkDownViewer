@@ -7,6 +7,44 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [0.4.0] - 2026-08-09
+
+First non-Go embedding surface: a C-shared library any language with a C
+FFI can load. Nothing changed for pure-Go consumers.
+
+### Added
+
+- **`libmdviewer` C-shared library** (`ffi/`, built with
+  `-buildmode=c-shared` via `scripts/build-ffi.sh`). Five thread-safe
+  exported symbols: `mdv_render` (Markdown → HTML), `mdv_parse` (Markdown
+  → version-1 document-AST JSON), `mdv_render_doc` (AST JSON → HTML,
+  enabling parse-once/render-many without cross-boundary object handles),
+  `mdv_free`, and `mdv_version`. Out-parameter/int-status calling
+  convention; every returned buffer is C-malloc'd UTF-8 with an uncounted
+  trailing NUL and must be freed with `mdv_free`. Options cross the
+  boundary as a strict, versioned JSON object mirroring the Go facade's
+  functional options — unknown fields, type mismatches, trailing content,
+  and unsupported versions are errors, so binding typos surface
+  immediately. A Go panic anywhere in an operation is contained at the
+  boundary and reported as the documented non-zero return plus a
+  `panic:`-prefixed message instead of unwinding into (and killing) the
+  host process; true C-allocation failure still aborts, like the Go
+  runtime itself on OOM. The `Resolver` callback does not cross the FFI.
+- **Prebuilt release artifacts.** Publishing a GitHub release now builds
+  and attaches `libmdviewer-<version>-<os>-<arch>.zip` (shared library +
+  header + LICENSE + an API-reference README) for macOS arm64/x86_64,
+  Linux amd64/arm64, and Windows amd64
+  (`.github/workflows/release-ffi.yml`).
+- **C harness** (`examples/c/`), compiled and run against the freshly
+  built library in CI on Linux, macOS, and Windows — the ABI's test
+  suite, exercising every symbol including error paths, the NULL-input
+  contract, and byte-for-byte render vs parse→render_doc agreement.
+- **`dart:ffi` example** (`examples/dart/`) demonstrating the pattern a
+  Flutter host uses; verified locally against a locally built library.
+- Docs: "Embedding from other languages" in README.md, an FFI-boundary
+  section in `docs/Design.md`, and FFI build/test instructions in
+  CONTRIBUTING.md.
+
 ## [0.3.0] - 2026-08-09
 
 ### Added
