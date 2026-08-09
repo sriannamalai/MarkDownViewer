@@ -163,6 +163,13 @@ versioned JSON object; unknown fields are errors so binding typos
 surface immediately. The `Resolver` callback does not cross the FFI
 (function-pointer marshalling is deferred).
 
+Every exported entry point runs its operation under a `recover`, so a
+panic — from hostile document JSON, a bug in a parsing/rendering
+dependency, or cgo's `malloc` wrapper, which aborts rather than returning
+NULL — becomes the documented non-zero return plus a `panic:`-prefixed
+error string. A Go caller can isolate a panic itself; an FFI caller
+cannot, and an unrecovered one would take down the whole host process.
+
 ## Feature set
 
 CommonMark (via goldmark) plus: GFM tables, strikethrough, task lists,

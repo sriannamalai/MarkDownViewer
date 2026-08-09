@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -86,5 +87,16 @@ func TestEmptyInputs(t *testing.T) {
 	}
 	if _, err := parseImpl(nil, nil); err != nil {
 		t.Errorf("parseImpl(nil): %v", err)
+	}
+}
+
+func TestPanicError(t *testing.T) {
+	if got := panicError("boom").Error(); got != "panic: boom" {
+		t.Errorf("panicError(string) = %q", got)
+	}
+	wrapped := errors.New("boom")
+	err := panicError(wrapped)
+	if !errors.Is(err, wrapped) {
+		t.Errorf("panicError(error) = %v, does not wrap the panic value", err)
 	}
 }

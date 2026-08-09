@@ -8,6 +8,7 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"unsafe"
 )
@@ -35,6 +36,14 @@ func goInput(p *C.char, n C.size_t) ([]byte, error) {
 	return out, nil
 }
 
+// panicError renders a recovered panic value as an FFI error.
+func panicError(r any) error {
+	if err, ok := r.(error); ok {
+		return fmt.Errorf("panic: %w", err)
+	}
+	return fmt.Errorf("panic: %v", r)
+}
+
 // goOpts copies the NUL-terminated options string (may be NULL).
 func goOpts(p *C.char) []byte {
 	if p == nil {
@@ -45,7 +54,8 @@ func goOpts(p *C.char) []byte {
 
 // cBuf copies b into a C-malloc'd buffer with a trailing NUL (not counted
 // in the returned length). The caller owns the buffer (mdv_free). Returns
-// an error if the allocation fails.
+// an error if the allocation fails; cgo's malloc wrapper panics rather
+// than returning NULL, which call turns into the same error result.
 func cBuf(b []byte) (*C.char, C.size_t, error) {
 	n := len(b)
 	p := C.malloc(C.size_t(n + 1))
@@ -60,8 +70,11 @@ func cBuf(b []byte) (*C.char, C.size_t, error) {
 }
 
 // call runs f and marshals its result or error into the out-parameters.
-// Returns 0 on success, 1 on error.
-func call(out **C.char, outLen *C.size_t, outErr **C.char, f func() ([]byte, error)) C.int {
+// Returns 0 on success, 1 on error. A panic anywhere below this point —
+// in the operation itself or in the cgo allocation wrappers, which abort
+// instead of returning NULL — is converted into an error result so it
+// cannot unwind through the exported entry point and kill the host.
+func call(out **C.char, outLen *C.size_t, outErr **C.char, f func() ([]byte, error)) (code C.int) {
 	if outErr != nil {
 		*outErr = nil
 	}
@@ -72,6 +85,15 @@ func call(out **C.char, outLen *C.size_t, outErr **C.char, f func() ([]byte, err
 		return 1
 	}
 	*out, *outLen = nil, 0
+	defer func() {
+		if r := recover(); r != nil {
+			*out, *outLen = nil, 0
+			if outErr != nil {
+				*outErr = C.CString(panicError(r).Error())
+			}
+			code = 1
+		}
+	}()
 	res, err := f()
 	if err != nil {
 		if outErr != nil {
