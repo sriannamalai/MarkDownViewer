@@ -259,6 +259,34 @@ An empty string (the default) stays fluid. Since the value flows into a CSS
 custom-property declaration, one containing `;` or `}` is rejected
 defensively and the option no-ops rather than emitting a defanged value.
 
+## Embedding from other languages
+
+Every release ships prebuilt C-shared libraries (`libmdviewer`) for macOS
+(arm64/x86_64), Linux (amd64/arm64), and Windows (amd64) — see the
+release's `libmdviewer-*.zip` assets. Five thread-safe symbols:
+`mdv_render` (Markdown → HTML), `mdv_parse` (Markdown → versioned
+document-AST JSON), `mdv_render_doc` (AST JSON → HTML, for
+parse-once/render-many), `mdv_free`, and `mdv_version`. Options cross the
+boundary as a small JSON object mirroring this package's functional
+options.
+
+```c
+char *html = NULL, *err = NULL; size_t n = 0;
+if (mdv_render(md, strlen(md), "{\"theme\": \"dark\"}", &html, &n, &err) == 0) {
+    fwrite(html, 1, n, stdout);
+    mdv_free(html);
+} else {
+    fprintf(stderr, "%s\n", err);
+    mdv_free(err);
+}
+```
+
+Each release zip bundles `ffi/README.md` as `README.md` alongside the
+library and header — that's the API reference (ownership: every returned
+buffer is freed with `mdv_free`). Working consumers: `examples/c/`
+(the CI-gated harness) and `examples/dart/` (`dart:ffi`, the pattern a
+Flutter host uses). To build locally: `./scripts/build-ffi.sh`.
+
 ## Security model
 
 - **Sanitized by default.** Raw HTML in Markdown input is passed through
@@ -281,10 +309,11 @@ in scope).
 v0.2 adds block-level source spans, a versioned JSON codec for the
 `document` tree, `RenderDoc`/`ParseWith`/`WithParserConfig`, an exported
 `assets` package, and context-aware parse/render variants on top of v0.1's
-Go package API and `mdview` CLI, ahead of an eventual v1.0 that commits to
-API stability. See [`docs/Design.md`](docs/Design.md#roadmap) for what
-remains — C-shared FFI + WASM builds, mobile bindings, a native
-render-tree renderer, and incremental rendering if profiling demands it.
+Go package API and `mdview` CLI. v0.4 adds the C-shared `libmdviewer` FFI
+described above, ahead of an eventual v1.0 that commits to API stability.
+See [`docs/Design.md`](docs/Design.md#roadmap) for what remains — WASM
+builds, mobile bindings, a native render-tree renderer, and incremental
+rendering if profiling demands it.
 
 ## License
 

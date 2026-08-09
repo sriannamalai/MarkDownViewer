@@ -150,6 +150,19 @@ render, and source-driven vs. already-parsed-tree-driven.
   section and `SECURITY.md` for the full contract and the resource-
   exhaustion background this is meant to help hosts work around.
 
+### FFI boundary (`ffi/`, v0.4)
+
+`ffi/` builds `libmdviewer` with `-buildmode=c-shared`. It is a leaf
+consumer of the public facade: pure-Go operation/option logic in
+cgo-free files (unit-tested), conversion-only cgo wrappers on top
+(proven by the C harness in CI on all three OSes). The AST crosses the
+boundary as the v0.2 versioned JSON — `mdv_parse` + `mdv_render_doc`
+give parse-once/render-many without cross-boundary object lifetimes,
+which is why no handle-based API exists. Options cross as a strict,
+versioned JSON object; unknown fields are errors so binding typos
+surface immediately. The `Resolver` callback does not cross the FFI
+(function-pointer marshalling is deferred).
+
 ## Feature set
 
 CommonMark (via goldmark) plus: GFM tables, strikethrough, task lists,
@@ -269,11 +282,14 @@ exported `assets` package, and context-aware `Parse`/`Render`/`RenderDoc`
 variants. See the Document model and Facade sections above for what
 shipped, and `CHANGELOG.md` for the release notes.
 
+v0.4 shipped the C-shared FFI (`.so`/`.dylib`/`.dll`), now that the
+`document` model has a stable wire format (JSON, pinned `Kind` values) to
+build a C ABI on top of — see the "FFI boundary" subsection above.
+
 Toward v1.0, what remains, roughly in order:
 
-1. **C-shared FFI (`.so`/`.dylib`/`.dll`) + WASM builds**, now that the
-   `document` model has a stable wire format (JSON, pinned `Kind` values)
-   to build a C ABI / JS boundary on top of.
+1. **WASM builds**, reusing the same JSON boundary the C-shared FFI
+   established.
 2. **Mobile bindings** (`gomobile` / Flutter FFI) on top of the FFI layer.
 3. **A native render-tree renderer** — for toolkit-native (non-webview)
    hosts, rendering directly from `document.Document` instead of through

@@ -70,6 +70,23 @@ canary test in `parser/frontmatter_test.go`
 (`TestUpstreamFrontmatterStillSwallowsUnterminated`), which fails loudly
 if upstream's swallow-on-unterminated behavior ever changes.
 
+## FFI (libmdviewer)
+
+`./scripts/build-ffi.sh` builds the C-shared library for your platform
+into `dist/ffi/<os>-<arch>/` (needs a C compiler; `CGO_ENABLED=1` is set
+by the script). The C harness is the ABI's test suite:
+
+```bash
+DIR="dist/ffi/$(go env GOOS)-$(go env GOARCH)"
+cc examples/c/harness.c -I"$DIR" -L"$DIR" -lmdviewer -o harness
+DYLD_LIBRARY_PATH="$DIR" ./harness   # LD_LIBRARY_PATH on Linux
+```
+
+CI builds the library and runs the harness on all three OSes. If you
+change any `mdv_*` signature or the options JSON, update `ffi/README.md`
+(packaged into release artifacts), `examples/c/harness.c`, and
+`examples/dart/` together — they are the boundary's consumers.
+
 ## Developer Certificate of Origin (DCO)
 
 All contributions must be signed off, certifying you wrote the change or
