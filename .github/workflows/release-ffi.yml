@@ -1,0 +1,36 @@
+name: Release FFI artifacts
+on:
+  release: {types: [published]}
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - {os: macos-14, target: darwin-arm64}
+          - {os: macos-13, target: darwin-amd64}
+          - {os: ubuntu-latest, target: linux-amd64}
+          - {os: ubuntu-24.04-arm, target: linux-arm64}
+          - {os: windows-latest, target: windows-amd64}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run: {shell: bash}
+    steps:
+      - uses: actions/checkout@v5
+        with: {ref: '${{ github.event.release.tag_name }}'}
+      - uses: actions/setup-go@v6
+        with: {go-version: '1.26.x'}
+      - run: VERSION='${{ github.event.release.tag_name }}' ./scripts/build-ffi.sh
+      - name: Package
+        run: |
+          ver='${{ github.event.release.tag_name }}'; ver="${ver#v}"
+          dir="dist/ffi/${{ matrix.target }}"
+          test -d "$dir"   # target must match the runner's native GOOS-GOARCH
+          zip="libmdviewer-${ver}-${{ matrix.target }}.zip"
+          cp LICENSE ffi/README.md "$dir"/
+          (cd "$dir" && zip -r "../../../$zip" .)
+          echo "ZIP=$zip" >> "$GITHUB_ENV"
+      - name: Upload to release
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: gh release upload '${{ github.event.release.tag_name }}' "$ZIP" --clobber
