@@ -7,6 +7,44 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [0.5.0] - 2026-08-10
+
+Completes the fragment-host story surfaced by real-world FFI consumption:
+diagrams, math, and syntax highlighting are now deliverable to hosts that
+render fragments into their own pages, over both the Go API and the C ABI.
+Nothing changed for full-page rendering.
+
+### Added
+
+- **`htmlrender.HighlightCSS(t theme.Theme) (string, error)`.** The chroma
+  syntax-highlighting stylesheet for that theme's mode — the same CSS a
+  full page embeds. Until now this was internal, so fragment output
+  emitted class-annotated code spans that no public API could style:
+  highlighting silently didn't work for fragment hosts. Go hosts combine
+  it with `theme.BaseCSS` and the theme's own CSS.
+- **`mdv_asset` C symbol** (sixth exported symbol; append-only ABI
+  growth): `int mdv_asset(const char* name, char** out, size_t* out_len,
+  char** out_err)`. Returns embedded static assets by registry name so
+  FFI fragment hosts can enable diagrams/math/highlighting without
+  vendoring anything. Registry (append-only, case-sensitive):
+  `mermaid.js`, `katex.js`, `katex.css` (all fonts inlined as data:
+  URIs — self-contained), `base.css`, and the composed `theme-light.css`
+  / `theme-dark.css` (theme tokens **plus** that mode's highlight CSS,
+  exactly what a full page embeds per mode, so applying the one file
+  yields working syntax highlighting). Unknown, empty, or NULL names
+  error with the message listing the valid names. Same memory contract
+  as every other call (`mdv_free`), same panic containment,
+  thread-safe.
+- C harness: five new checks covering asset retrieval, content markers,
+  the composed theme CSS, and the error paths (22 checks total).
+
+### Changed
+
+- `ffi/README.md` (packaged into release artifacts) documents the asset
+  registry, the `base.css` pairing rule for the `--md-*` variables, and
+  that the generated header is not const-qualified (cast as needed —
+  the library never writes through input pointers).
+
 ## [0.4.0] - 2026-08-09
 
 First non-Go embedding surface: a C-shared library any language with a C
