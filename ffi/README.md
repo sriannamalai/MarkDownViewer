@@ -50,7 +50,7 @@ vendoring anything. Registry (append-only, case-sensitive):
 Full-page output (the default) already embeds everything; you only need
 `mdv_asset` when rendering fragments into your own page. Apply one
 `theme-*.css` per document view; if you ship both and switch at
-runtime, scope them yourself.
+runtime, scope them yourself. The `--md-*` variables in `theme-*.css` take effect through `base.css`'s rules — apply both for full styling; the chroma highlighting rules work standalone.
 
 Note: the generated header is not const-qualified (a cgo limitation);
 the library never writes through input pointers — cast as needed.

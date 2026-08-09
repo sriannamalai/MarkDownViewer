@@ -225,6 +225,8 @@ fmt.Fprintf(w, "<style>%s</style><script>%s</script><script>%s</script>",
     assets.KatexCSS(), assets.KatexJS(), assets.MermaidJS())
 ```
 
+Fragment hosts also need the syntax-highlighting stylesheet for code blocks — `htmlrender.HighlightCSS(theme.Light())` / `(theme.Dark())` in Go, or the composed `theme-light.css` / `theme-dark.css` assets over the C ABI, which bundle the theme tokens and highlight CSS together.
+
 Built-in themes are CSS custom-property sets layered over one base
 stylesheet: `light`, `dark`, and `auto` (light by default, with a
 `prefers-color-scheme` media query for dark). Override individual variables
@@ -263,10 +265,11 @@ defensively and the option no-ops rather than emitting a defanged value.
 
 Every release ships prebuilt C-shared libraries (`libmdviewer`) for macOS
 (arm64/x86_64), Linux (amd64/arm64), and Windows (amd64) — see the
-release's `libmdviewer-*.zip` assets. Five thread-safe symbols:
+release's `libmdviewer-*.zip` assets. Six thread-safe symbols:
 `mdv_render` (Markdown → HTML), `mdv_parse` (Markdown → versioned
 document-AST JSON), `mdv_render_doc` (AST JSON → HTML, for
-parse-once/render-many), `mdv_free`, and `mdv_version`. Options cross the
+parse-once/render-many), `mdv_asset` (embedded assets: mermaid/KaTeX bundles,
+theme+highlight CSS), `mdv_free`, and `mdv_version`. Options cross the
 boundary as a small JSON object mirroring this package's functional
 options. Fragment-mode hosts can pull the embedded mermaid/KaTeX bundles
 and per-theme highlight CSS over the boundary via `mdv_asset` (v0.5); Go

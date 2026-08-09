@@ -170,7 +170,7 @@ func mdv_render_doc(docJSON *C.char, jsonLen C.size_t, optsJSON *C.char, outHTML
 func mdv_asset(name *C.char, out **C.char, outLen *C.size_t, outErr **C.char) C.int {
 	return call(out, outLen, outErr, func() ([]byte, error) {
 		if name == nil {
-			return nil, errors.New("nil asset name")
+			return assetImpl("")
 		}
 		return assetImpl(C.GoString(name))
 	})
