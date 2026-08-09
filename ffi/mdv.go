@@ -8,6 +8,7 @@ import "C"
 
 import (
 	"errors"
+	"math"
 	"unsafe"
 )
 
@@ -25,6 +26,9 @@ func goInput(p *C.char, n C.size_t) ([]byte, error) {
 		}
 		return nil, nil
 	}
+	if n > C.size_t(math.MaxInt) {
+		return nil, errors.New("input length exceeds maximum")
+	}
 	src := unsafe.Slice((*byte)(unsafe.Pointer(p)), int(n))
 	out := make([]byte, len(src))
 	copy(out, src)
@@ -40,15 +44,19 @@ func goOpts(p *C.char) []byte {
 }
 
 // cBuf copies b into a C-malloc'd buffer with a trailing NUL (not counted
-// in the returned length). The caller owns the buffer (mdv_free).
-func cBuf(b []byte) (*C.char, C.size_t) {
+// in the returned length). The caller owns the buffer (mdv_free). Returns
+// an error if the allocation fails.
+func cBuf(b []byte) (*C.char, C.size_t, error) {
 	n := len(b)
 	p := C.malloc(C.size_t(n + 1))
+	if p == nil {
+		return nil, 0, errors.New("out of memory")
+	}
 	if n > 0 {
 		C.memcpy(p, unsafe.Pointer(&b[0]), C.size_t(n))
 	}
 	*(*byte)(unsafe.Add(p, n)) = 0
-	return (*C.char)(p), C.size_t(n)
+	return (*C.char)(p), C.size_t(n), nil
 }
 
 // call runs f and marshals its result or error into the out-parameters.
@@ -71,7 +79,14 @@ func call(out **C.char, outLen *C.size_t, outErr **C.char, f func() ([]byte, err
 		}
 		return 1
 	}
-	*out, *outLen = cBuf(res)
+	buf, bufLen, err := cBuf(res)
+	if err != nil {
+		if outErr != nil {
+			*outErr = C.CString(err.Error())
+		}
+		return 1
+	}
+	*out, *outLen = buf, bufLen
 	return 0
 }
 
