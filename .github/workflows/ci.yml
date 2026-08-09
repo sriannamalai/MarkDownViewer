@@ -30,3 +30,24 @@ jobs:
         with: {go-version: '1.26.x'}
       - run: go test -coverprofile=cover.out ./...
       - run: ./scripts/check-coverage.sh cover.out 75
+  ffi:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run: {shell: bash}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with: {go-version: '1.26.x'}
+      - run: ./scripts/build-ffi.sh
+      - name: Build and run C harness
+        run: |
+          DIR="dist/ffi/$(go env GOOS)-$(go env GOARCH)"
+          gcc examples/c/harness.c -I"$DIR" -L"$DIR" -lmdviewer -o harness
+          case "$(go env GOOS)" in
+            linux)   LD_LIBRARY_PATH="$DIR" ./harness ;;
+            darwin)  DYLD_LIBRARY_PATH="$DIR" ./harness ;;
+            windows) PATH="$DIR:$PATH" ./harness.exe ;;
+          esac
