@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 
-	"github.com/sriannamalai/markdownviewer/assets"
 	markdownviewer "github.com/sriannamalai/markdownviewer"
+	"github.com/sriannamalai/markdownviewer/assets"
 	"github.com/sriannamalai/markdownviewer/document"
-	"github.com/sriannamalai/markdownviewer/theme"
 	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
+	"github.com/sriannamalai/markdownviewer/theme"
 )
 
 // renderImpl is mdv_render behind the cgo boundary: markdown -> HTML.

@@ -68,6 +68,27 @@ int main(void) {
     CHECK(rc != 0 && doc_bad_err != NULL, "invalid document JSON fails");
     mdv_free(doc_bad_err);
 
+    /* Assets (v0.5). */
+    char *asset = NULL, *asset_err = NULL; size_t asset_len = 0;
+    rc = mdv_asset((char *)"mermaid.js", &asset, &asset_len, &asset_err);
+    CHECK(rc == 0 && asset != NULL && asset_len > 1000, "mdv_asset returns mermaid.js");
+    CHECK(asset != NULL && strstr(asset, "mermaid") != NULL, "mermaid.js has content marker");
+    mdv_free(asset); asset = NULL;
+
+    rc = mdv_asset((char *)"theme-dark.css", &asset, &asset_len, &asset_err);
+    CHECK(rc == 0 && asset != NULL && strstr(asset, ".chroma") != NULL,
+          "theme-dark.css includes chroma highlighting CSS");
+    mdv_free(asset); asset = NULL;
+
+    rc = mdv_asset((char *)"bogus.js", &asset, &asset_len, &asset_err);
+    CHECK(rc != 0 && asset_err != NULL && strstr(asset_err, "mermaid.js") != NULL,
+          "unknown asset error lists valid names");
+    mdv_free(asset_err); asset_err = NULL;
+
+    rc = mdv_asset(NULL, &asset, &asset_len, &asset_err);
+    CHECK(rc != 0, "NULL asset name fails");
+    mdv_free(asset_err); asset_err = NULL;
+
     /* Cleanup: every returned buffer through mdv_free; NULL is a no-op. */
     mdv_free(html); mdv_free(doc); mdv_free(html2); mdv_free(frag);
     mdv_free(NULL);

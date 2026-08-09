@@ -268,7 +268,10 @@ release's `libmdviewer-*.zip` assets. Five thread-safe symbols:
 document-AST JSON), `mdv_render_doc` (AST JSON → HTML, for
 parse-once/render-many), `mdv_free`, and `mdv_version`. Options cross the
 boundary as a small JSON object mirroring this package's functional
-options.
+options. Fragment-mode hosts can pull the embedded mermaid/KaTeX bundles
+and per-theme highlight CSS over the boundary via `mdv_asset` (v0.5); Go
+fragment hosts get the same via the `assets` package and
+`htmlrender.HighlightCSS`.
 
 ```c
 char *html = NULL, *err = NULL; size_t n = 0;

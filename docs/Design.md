@@ -173,6 +173,11 @@ aborts the process on true allocation failure (an unrecoverable runtime
 throw, not a panic) — the same behavior as the Go runtime itself running
 out of memory.
 
+v0.5 adds `mdv_asset`, exposing the embedded asset bundles and composed
+per-theme highlight CSS — closing the fragment-host gap where
+diagrams/math/highlighting were reachable only through full-page output.
+The registry is append-only, mirroring the Kind-value policy.
+
 ## Feature set
 
 CommonMark (via goldmark) plus: GFM tables, strikethrough, task lists,

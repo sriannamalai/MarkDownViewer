@@ -159,6 +159,23 @@ func mdv_render_doc(docJSON *C.char, jsonLen C.size_t, optsJSON *C.char, outHTML
 	})
 }
 
+// mdv_asset writes a copy of the embedded static asset registered under
+// name (NUL-terminated; e.g. "mermaid.js", "katex.css",
+// "theme-dark.css" — see the packaged README for the full registry)
+// into the out-parameters. Same conventions as mdv_render: 0 on
+// success, caller frees *out with mdv_free; nonzero + *out_err on
+// error (unknown names list the valid ones).
+//
+//export mdv_asset
+func mdv_asset(name *C.char, out **C.char, outLen *C.size_t, outErr **C.char) C.int {
+	return call(out, outLen, outErr, func() ([]byte, error) {
+		if name == nil {
+			return nil, errors.New("nil asset name")
+		}
+		return assetImpl(C.GoString(name))
+	})
+}
+
 // mdv_free frees any buffer returned by this library. mdv_free(NULL) is a
 // no-op. Do not free the mdv_version string.
 //
