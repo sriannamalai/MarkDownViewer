@@ -100,3 +100,54 @@ func TestPanicError(t *testing.T) {
 		t.Errorf("panicError(error) = %v, does not wrap the panic value", err)
 	}
 }
+
+func TestAssetImpl(t *testing.T) {
+	markers := map[string][]string{
+		"mermaid.js":      {"mermaid"},
+		"katex.js":        {"katex"},
+		"katex.css":       {"@font-face", "data:font"},
+		"base.css":        {"--md-max-width"},
+		"theme-light.css": {"--md-bg", ".chroma"},
+		"theme-dark.css":  {"--md-bg", ".chroma"},
+	}
+	for name, wants := range markers {
+		got, err := assetImpl(name)
+		if err != nil {
+			t.Fatalf("assetImpl(%q): %v", name, err)
+		}
+		if len(got) == 0 {
+			t.Fatalf("assetImpl(%q): empty", name)
+		}
+		for _, w := range wants {
+			if !bytes.Contains(bytes.ToLower(got), []byte(strings.ToLower(w))) {
+				t.Errorf("assetImpl(%q): missing marker %q", name, w)
+			}
+		}
+	}
+}
+
+func TestAssetImplThemesDiffer(t *testing.T) {
+	light, err := assetImpl("theme-light.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dark, err := assetImpl("theme-dark.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(light, dark) {
+		t.Error("theme-light.css and theme-dark.css are identical")
+	}
+}
+
+func TestAssetImplUnknown(t *testing.T) {
+	for _, name := range []string{"", "bogus.js", "Mermaid.js"} {
+		_, err := assetImpl(name)
+		if err == nil {
+			t.Fatalf("assetImpl(%q): want error", name)
+		}
+		if !strings.Contains(err.Error(), "mermaid.js") || !strings.Contains(err.Error(), "theme-dark.css") {
+			t.Errorf("assetImpl(%q): error does not list valid names: %v", name, err)
+		}
+	}
+}
