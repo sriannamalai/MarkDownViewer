@@ -5,5 +5,5 @@
 library;
 
 export 'src/mdviewer_base.dart';
-// src/options.dart is added by Task 3 (render/parse options + calls).
+export 'src/options.dart';
 export 'src/exceptions.dart';
