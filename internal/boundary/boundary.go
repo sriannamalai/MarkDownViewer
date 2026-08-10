@@ -1,8 +1,9 @@
-// Package boundary implements the shared JSON boundary consumed by every
-// exported entry point (cgo FFI today, wasm tomorrow): strict version-1
-// options decoding plus markdown/document/HTML conversions and the
-// embedded static asset registry. It has no cgo or wasm dependency itself
-// so it can be linked into either main package unmodified.
+// Package boundary implements the shared JSON boundary consumed by both
+// exported entry points — the cgo FFI (ffi/) and the wasm build (wasm/):
+// strict version-1 options decoding plus markdown/document/HTML
+// conversions and the embedded static asset registry. It has no cgo or
+// wasm dependency itself so it can be linked into either main package
+// unmodified.
 package boundary
 
 import (
@@ -15,8 +16,8 @@ import (
 	"github.com/sriannamalai/markdownviewer/theme"
 )
 
-// Render is mdv_render behind the cgo boundary: markdown -> HTML. resolver
-// may be nil (default resolution).
+// Render renders markdown to HTML per the strict version-1 options JSON;
+// resolver may be nil for default resolution.
 func Render(md, optsJSON []byte, resolver htmlrender.Resolver) ([]byte, error) {
 	o, err := decodeOptions(optsJSON)
 	if err != nil {
@@ -25,7 +26,7 @@ func Render(md, optsJSON []byte, resolver htmlrender.Resolver) ([]byte, error) {
 	return markdownviewer.Render(md, o.toFacadeOptions(resolver)...)
 }
 
-// Parse is mdv_parse: markdown -> version-1 document JSON. Options are
+// Parse parses markdown into version-1 document JSON. Options are
 // validated for consistency with the other calls, but no current field
 // affects parsing.
 func Parse(md, optsJSON []byte) ([]byte, error) {
@@ -39,8 +40,8 @@ func Parse(md, optsJSON []byte) ([]byte, error) {
 	return document.MarshalJSON(doc)
 }
 
-// RenderDoc is mdv_render_doc: version-1 document JSON -> HTML. resolver
-// may be nil.
+// RenderDoc renders a version-1 document JSON to HTML per the strict
+// version-1 options JSON; resolver may be nil for default resolution.
 func RenderDoc(docJSON, optsJSON []byte, resolver htmlrender.Resolver) ([]byte, error) {
 	o, err := decodeOptions(optsJSON)
 	if err != nil {
@@ -53,9 +54,9 @@ func RenderDoc(docJSON, optsJSON []byte, resolver htmlrender.Resolver) ([]byte, 
 	return markdownviewer.RenderDoc(doc, o.toFacadeOptions(resolver)...)
 }
 
-// Asset is mdv_asset: returns an embedded static asset by registry
-// name. The registry is append-only (like document Kind values); names
-// are case-sensitive. theme-*.css are composed: theme tokens plus that
+// Asset returns an embedded static asset by registry name. The registry
+// is append-only (like document Kind values); names are case-sensitive.
+// theme-*.css are composed: theme tokens plus that
 // theme's chroma highlighting CSS — what a full page embeds for the
 // mode — so fragment hosts get working syntax highlighting by applying
 // the one file. Standalone theme-dark.css needs no light-rule

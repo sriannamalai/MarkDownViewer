@@ -81,7 +81,7 @@ never traps/crashes the module).
 ### Options
 
 Same strict version-1 options JSON as the C FFI and the rest of the
-library — see [`ffi/README.md`](../../ffi/README.md#options-json) for
+library — see [`ffi/README.md`](https://github.com/sriannamalai/markdownviewer/blob/main/ffi/README.md#options-json) for
 the full field table (`theme`, `fragment`, `allowRawHTML`, `mermaid`,
 `math`, `highlighting`, `maxWidth`, `sourceMap`, `themeOverrides`,
 `stylesheet`). Passing `options` omitted or `undefined` uses library
@@ -122,7 +122,7 @@ without vendoring anything — `mermaid.js`, `katex.js`, `katex.css`,
 `base.css`, `theme-light.css`, `theme-dark.css`. Full-page output (the
 default) already embeds everything; you only need `asset()` when
 rendering fragments into your own page. See
-[`ffi/README.md`](../../ffi/README.md#assets) for the full registry
+[`ffi/README.md`](https://github.com/sriannamalai/markdownviewer/blob/main/ffi/README.md#assets) for the full registry
 table. Everything is offline — no CDN fetch, ever.
 
 ## Size

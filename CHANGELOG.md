@@ -47,7 +47,7 @@ crosses both boundaries. Nothing changed for pure-Go consumers.
   dispatch, response encoding) that used to live entirely inside `ffi/`
   is now `internal/boundary`, a shared cgo-free package consumed by both
   the C ABI main and the wasm main. No public Go API change.
-- `ffi/README.md` (packaged into release artifacts) documents the two
+- `ffi/README.md` (packaged into release artifacts) documents the three
   new symbols, the resolver callback signature, and the `mdv_alloc`
   ownership contract.
 
