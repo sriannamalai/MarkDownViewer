@@ -7,6 +7,28 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [Unreleased]
+
+### Fixed
+
+- **FFI:** `cResolver` now guards the `out_url_len` `size_t → int`
+  conversion (contract-violation error instead of a hypothetical 32-bit
+  truncation) and frees a non-NULL `*out_url` on every contract-violation
+  path, so a misbehaving host callback cannot leak.
+- **WASM wrapper:** option values that are `undefined` or functions now
+  throw a `TypeError` instead of being silently dropped by
+  `JSON.stringify`; a failed `loadMdviewer()` is no longer cached, so a
+  later call can retry after a corrupt-binary or network failure.
+
+### Changed
+
+- `ffi/README.md` documents the violation-path freeing rule, the
+  exact-length requirement on `out_url_len`, and the header's two
+  `-Wunused-function` warnings under `-Wall`; the packaged wasm README
+  documents load-retry semantics and the guarded Node-only dynamic
+  import. Both harnesses now cover the wiki-link resolve path and the
+  wasm harness covers corrupt-binary rejection + retry in a subprocess.
+
 ## [0.6.0] - 2026-08-10
 
 Adds a second non-Go embedding surface (WebAssembly) alongside the C ABI,

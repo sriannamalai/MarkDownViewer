@@ -50,6 +50,9 @@ reuse the resolved `Mdviewer` object. If `wasmSource` is corrupt or was
 built with a mismatched Go toolchain (so the Go runtime fails to start),
 the returned promise **rejects** with a descriptive `Error` — it never
 hangs forever and never crashes the process with an unhandled rejection.
+A rejected load is not cached: calling `loadMdviewer()` again retries
+from scratch, while a successful load stays cached for the module's
+lifetime.
 
 ### Bundlers
 
@@ -60,7 +63,11 @@ plain ESM with a relative `import './wasm_exec.js'` and a
 automatically. If yours doesn't, either configure it to copy
 `mdviewer.wasm` alongside the built output, or inline it (e.g. as a
 base64 asset) and pass the resulting `ArrayBuffer`/`Uint8Array` to
-`loadMdviewer()` explicitly.
+`loadMdviewer()` explicitly. The Node-only `file:` branch inside
+`index.js` uses a guarded dynamic `import('node:fs/promises')` —
+browsers never execute that branch, and bundlers that statically
+resolve all dynamic imports should treat it as external/ignored
+(standard handling in modern bundlers).
 
 ## API
 
@@ -88,7 +95,9 @@ the full field table (`theme`, `fragment`, `allowRawHTML`, `mermaid`,
 defaults (equivalent to `null` at the JSON boundary — no version is
 injected on your behalf). `options.resolver` is the one field that
 isn't part of the JSON: it's stripped out client-side and passed to the
-wasm module as a plain callback.
+wasm module as a plain callback. Every other option value must be
+JSON-serializable — `undefined` or a function value throws a
+`TypeError` rather than being silently dropped by `JSON.stringify`.
 
 ### Resolver
 

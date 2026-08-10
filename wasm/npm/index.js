@@ -43,6 +43,12 @@ function splitOptions(options) {
   if (resolver !== null && typeof resolver !== 'function') {
     throw new TypeError('options.resolver must be a function');
   }
+  for (const [key, value] of Object.entries(rest)) {
+    if (value === undefined || typeof value === 'function') {
+      throw new TypeError(
+        `options.${key} is not JSON-serializable; JSON.stringify would drop it silently`);
+    }
+  }
   const json = Object.keys(rest).length === 0 ? null : JSON.stringify(rest);
   return { json, resolver };
 }
@@ -54,7 +60,7 @@ function splitOptions(options) {
  */
 export function loadMdviewer(wasmSource) {
   if (loadPromise) return loadPromise;
-  loadPromise = (async () => {
+  const p = (async () => {
     const go = new globalThis.Go();
     const ready = new Promise((resolve) => {
       globalThis.__libmdviewer_onready = resolve;
@@ -97,5 +103,9 @@ export function loadMdviewer(wasmSource) {
       },
     };
   })();
-  return loadPromise;
+  loadPromise = p;
+  p.catch(() => {
+    if (loadPromise === p) loadPromise = null;
+  });
+  return p;
 }

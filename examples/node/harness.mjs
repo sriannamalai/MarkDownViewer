@@ -2,6 +2,7 @@
 // examples/c/harness.c. Build first: ./scripts/build-wasm.sh
 // Run from the repo root: node examples/node/harness.mjs
 import { loadMdviewer } from '../../dist/wasm/npm/index.js';
+import { spawnSync } from 'node:child_process';
 
 let failures = 0;
 function check(cond, msg) {
@@ -79,6 +80,39 @@ throws(() => mdv.render(rmd, { fragment: true, resolver: () => 42 }),
 
 // Singleton.
 check(await loadMdviewer() === mdv, 'loadMdviewer is a singleton');
+
+// Non-serializable option values throw instead of being silently dropped.
+throws(() => mdv.render(md, { bogusField: undefined }), 'bogusField',
+  'undefined option value throws instead of vanishing');
+throws(() => mdv.render(md, { onClick: () => {} }), 'onClick',
+  'function option value throws instead of vanishing');
+
+// Wiki-link RESOLVE path (kind 2), not just decline.
+const wikiResolved = mdv.render('[[Wiki Page]]', {
+  fragment: true,
+  resolver: (kind, target) => (kind === 2 ? `notes/${target}.html` : null),
+});
+check(wikiResolved.includes('href="notes/Wiki Page.html"'), 'resolved wiki-link URL emitted verbatim');
+check(!wikiResolved.includes('Wiki Page.md'), 'resolved wiki-link does not fall back to .md default');
+
+// Corrupt-wasm rejection + retry-after-failure, in a subprocess (the
+// singleton in THIS process already holds a good load).
+const sub = spawnSync(process.execPath, ['--input-type=module', '-e', `
+  import { loadMdviewer } from ${JSON.stringify(new URL('../../dist/wasm/npm/index.js', import.meta.url).href)};
+  const bad = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]); // magic+version only
+  let rejected = false;
+  try { await loadMdviewer(bad); } catch (e) {
+    rejected = /wasm start failed|exited before/i.test(String(e.message));
+  }
+  if (!rejected) { console.error('corrupt wasm did not reject usefully'); process.exit(1); }
+  // Retry with the real binary must now succeed (rejection is not cached).
+  const mdv = await loadMdviewer();
+  if (!mdv.render('# retry', { fragment: true }).includes('<h1')) process.exit(1);
+  console.log('subprocess ok');
+  process.exit(0);
+`], { encoding: 'utf8', timeout: 60_000 });
+check(sub.status === 0 && sub.stdout.includes('subprocess ok'),
+  `corrupt-wasm rejects + retry succeeds in subprocess [status ${sub.status}: ${(sub.stderr || '').trim()}]`);
 
 if (failures > 0) { console.error(`${failures} failure(s)`); process.exit(1); }
 console.log('all checks passed');
