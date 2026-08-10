@@ -25,11 +25,13 @@ class Mdviewer {
   /// boundary error (bad options JSON, malformed input, etc.) with the
   /// exact boundary message.
   String render(String markdown, {MdvOptions? options}) {
-    // TODO(task-4): route to mdv_render_r via a NativeCallable wrapping
-    // options.resolver, removing this guard.
-    if (options?.resolver != null) {
-      throw UnimplementedError(
-        'MdvOptions.resolver is not wired to the boundary yet (Task 4)',
+    final resolver = options?.resolver;
+    if (resolver != null) {
+      return _callWithResolver(
+        _b.renderR,
+        markdown,
+        options?.toJson(),
+        resolver,
       );
     }
     return _call2(_b.render, markdown, options?.toJson());
@@ -56,14 +58,16 @@ class Mdviewer {
   /// the `Map` it decoded to, or as that map's JSON-encoded `String` form
   /// — without re-parsing the source markdown.
   String renderDoc(Object doc, {MdvOptions? options}) {
-    // TODO(task-4): route to mdv_render_doc_r via a NativeCallable
-    // wrapping options.resolver, removing this guard.
-    if (options?.resolver != null) {
-      throw UnimplementedError(
-        'MdvOptions.resolver is not wired to the boundary yet (Task 4)',
+    final docJson = doc is String ? doc : jsonEncode(doc);
+    final resolver = options?.resolver;
+    if (resolver != null) {
+      return _callWithResolver(
+        _b.renderDocR,
+        docJson,
+        options?.toJson(),
+        resolver,
       );
     }
-    final docJson = doc is String ? doc : jsonEncode(doc);
     return _call2(_b.renderDoc, docJson, options?.toJson());
   }
 
@@ -141,6 +145,119 @@ class Mdviewer {
       pkgffi.malloc.free(out);
       pkgffi.malloc.free(outLen);
       pkgffi.malloc.free(outErr);
+    }
+  }
+
+  /// Bridges [resolve] across the FFI boundary as a synchronous C callback
+  /// (via a per-call [ffi.NativeCallable.isolateLocal]) and calls [fn]
+  /// (`mdv_render_r` / `mdv_render_doc_r`) with the same 8-arg out-param
+  /// convention [_call2] uses for the plain 6-arg symbols.
+  ///
+  /// A throwing Dart [resolve] cannot unwind across the native boundary —
+  /// that is undefined behavior for a `NativeCallable` — so the callback
+  /// catches it, records it in [hostError], and declines (returns `0`)
+  /// for every remaining target in this render; declining is always a
+  /// contract-valid outcome, so the render itself proceeds (and typically
+  /// succeeds) via default resolution for the rest. Once the native call
+  /// returns, a non-null [hostError] is rethrown as a [MdviewerException]
+  /// regardless of whether the render succeeded or failed on its own —
+  /// this reproduces the wasm/JS surface, where a throwing resolver fails
+  /// the render outright, even though mechanically on the FFI side the
+  /// failing targets were merely declined.
+  String _callWithResolver(
+    RenderRDart fn,
+    String input,
+    String? optsJson,
+    MdvResolver resolve,
+  ) {
+    Object? hostError;
+    late final ffi.NativeCallable<ResolverFnC> callable;
+    callable = ffi.NativeCallable<ResolverFnC>.isolateLocal((
+      int kind,
+      ffi.Pointer<ffi.Char> target,
+      int targetLen,
+      ffi.Pointer<ffi.Void> userdata,
+      ffi.Pointer<ffi.Pointer<ffi.Char>> outUrl,
+      ffi.Pointer<ffi.Size> outUrlLen,
+    ) {
+      if (hostError != null) return 0; // already failed: decline the rest
+      try {
+        final t = utf8.decode(target.cast<ffi.Uint8>().asTypedList(targetLen));
+        // kind is ABI-frozen 0/1/2 today (link/image/wikiLink; see
+        // ffi/README.md), but the C contract allows append-only growth.
+        // An index outside the enum we know about must decline rather
+        // than crash on MdvResolveKind.values[kind] (RangeError) — a
+        // future kind should degrade to "no host opinion", not a fault.
+        if (kind < 0 || kind >= MdvResolveKind.values.length) return 0;
+        final url = resolve(MdvResolveKind.values[kind], t);
+        if (url == null) return 0; // decline: default resolution applies
+        final bytes = utf8.encode(url);
+        // mdv_alloc: the library takes ownership and frees this buffer
+        // itself (including on an invalid-length failure below) — see
+        // ffi/README.md's "Memory: mdv_alloc".
+        final buf = _b.alloc(bytes.length);
+        if (buf.address == 0) return 0; // host allocation failure: decline
+        buf.cast<ffi.Uint8>().asTypedList(bytes.length).setAll(0, bytes);
+        outUrl.value = buf.cast();
+        outUrlLen.value = bytes.length;
+        return 1;
+      } catch (e) {
+        hostError = e;
+        return 0; // decline the remainder; rethrown after fn() returns
+      }
+    }, exceptionalReturn: 0);
+    try {
+      final inBytes = utf8.encode(input);
+      final inPtr = pkgffi.malloc<ffi.Uint8>(inBytes.length);
+      inPtr.asTypedList(inBytes.length).setAll(0, inBytes);
+      final optsPtr = optsJson == null
+          ? ffi.Pointer<ffi.Char>.fromAddress(0)
+          : optsJson.toNativeUtf8(allocator: pkgffi.malloc).cast<ffi.Char>();
+      final out = pkgffi.malloc<ffi.Pointer<ffi.Char>>();
+      final outLen = pkgffi.malloc<ffi.Size>();
+      final outErr = pkgffi.malloc<ffi.Pointer<ffi.Char>>();
+      try {
+        final rc = fn(
+          inPtr.cast(),
+          inBytes.length,
+          optsPtr,
+          callable.nativeFunction,
+          ffi.Pointer<ffi.Void>.fromAddress(0),
+          out,
+          outLen,
+          outErr,
+        );
+        if (rc != 0) {
+          final err = outErr.value;
+          final msg = err.address == 0
+              ? 'unknown error (code $rc)'
+              : err.cast<pkgffi.Utf8>().toDartString();
+          if (err.address != 0) _b.free(err);
+          if (hostError != null) {
+            throw MdviewerException('resolver threw: $hostError');
+          }
+          throw MdviewerException(msg);
+        }
+        final resultPtr = out.value;
+        // Copy to a Dart String (utf8.decode allocates its own memory)
+        // BEFORE mdv_free — the asTypedList view dies with the buffer.
+        final result = utf8.decode(
+          resultPtr.cast<ffi.Uint8>().asTypedList(outLen.value),
+        );
+        _b.free(resultPtr);
+        if (hostError != null) {
+          throw MdviewerException('resolver threw: $hostError');
+        }
+        return result;
+      } finally {
+        pkgffi.malloc.free(inPtr);
+        if (optsPtr.address != 0) pkgffi.malloc.free(optsPtr);
+        pkgffi.malloc.free(out);
+        pkgffi.malloc.free(outLen);
+        pkgffi.malloc.free(outErr);
+      }
+    } finally {
+      callable.close(); // per-call callable; must not leak
     }
   }
 }

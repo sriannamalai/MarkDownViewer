@@ -100,14 +100,6 @@ void main() {
     expect(map.containsKey('version'), isFalse);
   });
 
-  test('render with a resolver throws UnimplementedError (until Task 4)', () {
-    expect(
-      () =>
-          mdv.render(md, options: MdvOptions(resolver: (kind, target) => null)),
-      throwsA(isA<UnimplementedError>()),
-    );
-  });
-
   test(
     'parse with a resolver throws ArgumentError (permanent, not a Task-4 seam)',
     () {

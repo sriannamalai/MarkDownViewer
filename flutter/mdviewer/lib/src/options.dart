@@ -6,8 +6,11 @@ import 'dart:convert';
 enum MdvResolveKind { link, image, wikiLink }
 
 /// Host resolver callback for [MdvOptions.resolver]. Return a resolved
-/// URL, or `null` to decline (default resolution applies). Not yet wired
-/// to the boundary — see the TODO on [Mdviewer.render].
+/// URL, or `null` to decline (default resolution applies). Called
+/// synchronously on the calling thread during a render; a thrown error
+/// is recorded, declines the remainder of the render, and is rethrown as
+/// a boundary exception after the native call returns (see
+/// `_callWithResolver` in `mdviewer_base.dart`).
 typedef MdvResolver = String? Function(MdvResolveKind kind, String target);
 
 /// Typed, strict-by-construction options for [Mdviewer.render],
