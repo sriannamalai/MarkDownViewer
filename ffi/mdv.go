@@ -3,6 +3,29 @@ package main
 /*
 #include <stdlib.h>
 #include <string.h>
+
+// mdv_resolver_fn is the host-supplied link/image/wiki-link resolution
+// callback. kind: 0=link, 1=image, 2=wiki-link (ABI-frozen). target is
+// NOT NUL-terminated and is only valid during the call. Return 1 =
+// resolved (*out_url allocated with mdv_alloc, *out_url_len set; the
+// library copies and frees it), 0 = declined (default resolution
+// applies). Any other return value fails the render.
+typedef int (*mdv_resolver_fn)(int kind, const char* target,
+                               size_t target_len, void* userdata,
+                               char** out_url, size_t* out_url_len);
+
+// cgo cannot call C function pointers directly; this bridge does.
+static int mdv_call_resolver(mdv_resolver_fn f, int kind,
+                             const char* target, size_t target_len,
+                             void* userdata,
+                             char** out_url, size_t* out_url_len) {
+	return f(kind, target, target_len, userdata, out_url, out_url_len);
+}
+
+// Plain malloc, NOT C.malloc from Go: cgo's C.malloc aborts the process
+// on failure instead of returning NULL, and mdv_alloc must be able to
+// report failure to the host honestly.
+static void* mdv_malloc_raw(size_t n) { return malloc(n); }
 */
 import "C"
 
@@ -13,6 +36,7 @@ import (
 	"unsafe"
 
 	"github.com/sriannamalai/markdownviewer/internal/boundary"
+	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
 )
 
 // version is injected at build time via -ldflags "-X main.version=…".
@@ -161,6 +185,56 @@ func mdv_render_doc(docJSON *C.char, jsonLen C.size_t, optsJSON *C.char, outHTML
 	})
 }
 
+// mdv_alloc allocates n bytes on the library's heap. Use it for every
+// buffer the host hands to the library (resolver out_url); the library
+// frees such buffers itself. mdv_alloc(0) returns a valid non-NULL
+// pointer. Returns NULL on allocation failure. Buffers the library
+// hands to the host are still freed with mdv_free; mdv_alloc/mdv_free
+// are the same allocator, which is the point: on Windows the host CRT's
+// heap and the library's heap may differ, so cross-boundary ownership
+// transfer must go through this pair.
+//
+//export mdv_alloc
+func mdv_alloc(n C.size_t) unsafe.Pointer {
+	if n == 0 {
+		n = 1
+	}
+	return C.mdv_malloc_raw(n)
+}
+
+// mdv_render_r is mdv_render plus a host resolver callback. resolver
+// may be NULL (identical to mdv_render). The callback runs
+// synchronously on the calling thread during render; it must not
+// unwind (longjmp, C++ exceptions) across the boundary. userdata is
+// passed through untouched. See mdv_resolver_fn for the contract; a
+// contract violation (return code other than 0/1, or 1 with NULL
+// *out_url) fails the render with a descriptive error.
+//
+//export mdv_render_r
+func mdv_render_r(md *C.char, mdLen C.size_t, optsJSON *C.char, resolver C.mdv_resolver_fn, userdata unsafe.Pointer, outHTML **C.char, outLen *C.size_t, outErr **C.char) C.int {
+	return call(outHTML, outLen, outErr, func() ([]byte, error) {
+		src, err := goInput(md, mdLen)
+		if err != nil {
+			return nil, err
+		}
+		return boundary.Render(src, goOpts(optsJSON), cResolver(resolver, userdata))
+	})
+}
+
+// mdv_render_doc_r is mdv_render_doc plus a host resolver callback.
+// Same conventions as mdv_render_r.
+//
+//export mdv_render_doc_r
+func mdv_render_doc_r(docJSON *C.char, jsonLen C.size_t, optsJSON *C.char, resolver C.mdv_resolver_fn, userdata unsafe.Pointer, outHTML **C.char, outLen *C.size_t, outErr **C.char) C.int {
+	return call(outHTML, outLen, outErr, func() ([]byte, error) {
+		doc, err := goInput(docJSON, jsonLen)
+		if err != nil {
+			return nil, err
+		}
+		return boundary.RenderDoc(doc, goOpts(optsJSON), cResolver(resolver, userdata))
+	})
+}
+
 // mdv_asset writes a copy of the embedded static asset registered under
 // name (NUL-terminated; e.g. "mermaid.js", "katex.css",
 // "theme-dark.css" — see the packaged README for the full registry)
@@ -192,4 +266,36 @@ func mdv_free(p *C.char) {
 //export mdv_version
 func mdv_version() *C.char {
 	return cVersion
+}
+
+// cResolver wraps a host C callback as an htmlrender.Resolver. A nil fn
+// yields a nil Resolver (default resolution). Contract violations panic;
+// the panic is converted to an FFI error by the call envelope in mdv.go,
+// so the host sees a failed render, never a crash.
+func cResolver(fn C.mdv_resolver_fn, userdata unsafe.Pointer) htmlrender.Resolver {
+	if fn == nil {
+		return nil
+	}
+	return func(kind htmlrender.ResolveKind, target string) (string, bool) {
+		ctarget := C.CString(target)
+		defer C.free(unsafe.Pointer(ctarget))
+		var outURL *C.char
+		var outLen C.size_t
+		rc := C.mdv_call_resolver(fn, C.int(kind), ctarget,
+			C.size_t(len(target)), userdata, &outURL, &outLen)
+		switch rc {
+		case 0:
+			return "", false
+		case 1:
+			if outURL == nil {
+				panic(fmt.Errorf("resolver contract violation: returned 1 with NULL out_url"))
+			}
+			b := unsafe.Slice((*byte)(unsafe.Pointer(outURL)), int(outLen))
+			u := string(b) // copy before freeing
+			C.free(unsafe.Pointer(outURL))
+			return u, true
+		default:
+			panic(fmt.Errorf("resolver contract violation: invalid return code %d (want 0 or 1)", int(rc)))
+		}
+	}
 }

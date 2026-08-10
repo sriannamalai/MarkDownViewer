@@ -12,14 +12,20 @@ language with a C FFI.
 
 ## API
 
-Six symbols. All functions are thread-safe.
+Nine symbols. All functions are thread-safe; this is unchanged by the
+resolver callback — the callback itself runs synchronously on the
+calling thread, one call at a time per render (see "Resolver callback"
+below).
 
-    int  mdv_render     (md, md_len, opts_json, &out_html, &out_len, &err);
-    int  mdv_parse      (md, md_len, opts_json, &out_json, &out_len, &err);
-    int  mdv_render_doc (doc_json, json_len, opts_json, &out_html, &out_len, &err);
-    int  mdv_asset      (name, &out, &out_len, &err);   /* embedded assets */
-    void mdv_free       (ptr);
-    const char* mdv_version(void);   /* static; do not free */
+    int  mdv_render         (md, md_len, opts_json, &out_html, &out_len, &err);
+    int  mdv_render_r       (md, md_len, opts_json, resolver, userdata, &out_html, &out_len, &err);
+    int  mdv_parse          (md, md_len, opts_json, &out_json, &out_len, &err);
+    int  mdv_render_doc     (doc_json, json_len, opts_json, &out_html, &out_len, &err);
+    int  mdv_render_doc_r   (doc_json, json_len, opts_json, resolver, userdata, &out_html, &out_len, &err);
+    int  mdv_asset          (name, &out, &out_len, &err);   /* embedded assets */
+    void* mdv_alloc         (n);                            /* library-heap allocator */
+    void mdv_free           (ptr);
+    const char* mdv_version (void);   /* static; do not free */
 
 Return 0 = success. On success the out-buffer is UTF-8 with an uncounted
 trailing NUL; on failure the return is non-zero and `err` holds a message.
@@ -30,7 +36,67 @@ aborts if C `malloc` fails.
 **Every returned buffer must be freed with `mdv_free`** (not plain `free`).
 `mdv_parse` emits a versioned document-AST JSON; feeding it back through
 `mdv_render_doc` lets you parse once and re-render many times (e.g. theme
-switching).
+switching). `mdv_render_r` and `mdv_render_doc_r` are their plain
+counterparts plus a host resolver callback (below); a NULL `resolver`
+behaves identically to `mdv_render` / `mdv_render_doc`.
+
+## Resolver callback
+
+`mdv_render_r` and `mdv_render_doc_r` accept a host callback that
+intercepts link, image, and wiki-link target resolution before default
+resolution applies:
+
+    typedef int (*mdv_resolver_fn)(int kind, const char* target,
+                                   size_t target_len, void* userdata,
+                                   char** out_url, size_t* out_url_len);
+
+Contract:
+
+- **Return value**: `1` = resolved (the library reads `*out_url` /
+  `*out_url_len` and copies them; you retain ownership only until the
+  call returns — allocate `*out_url` with `mdv_alloc`, never a
+  language-native allocator, since the library frees it itself). `0` =
+  declined; default resolution applies. Any other return value is a
+  contract violation and **fails the render** with a descriptive error.
+- **1 with a NULL `*out_url`** is also a contract violation and fails
+  the render.
+- `target` is **not NUL-terminated** and is **only valid for the
+  duration of the call** — copy it if you need it afterward.
+- The callback runs **synchronously on the calling thread** during
+  render, one call at a time per render; it must not unwind across the
+  boundary (no `longjmp`, no C++ exceptions).
+- `userdata` is passed through untouched — use it for callback context.
+
+`kind` (ABI-frozen, append-only):
+
+| Value | Meaning |
+|---|---|
+| `0` | link |
+| `1` | image |
+| `2` | wiki-link |
+
+Trust contract: exactly as with the Go `Options.Resolver`, a resolved
+URL is emitted **verbatim** into the output HTML (HTML-escaped only —
+no scheme allowlist is applied to it). Declined targets fall back to
+the library's default resolution (wiki-links get `.md` appended) and
+the normal `safeURL` scheme filtering.
+
+## Memory: mdv_alloc
+
+`mdv_alloc(n)` allocates `n` bytes on the **library's** heap. Use it
+for every buffer you hand back to the library — currently, the
+resolver's `*out_url`. This matters because on Windows the host's CRT
+heap and the library's CRT heap can be different heaps: freeing a
+host-allocated pointer inside the library (or vice versa) is undefined
+behavior. `mdv_alloc` / `mdv_free` are the same allocator on both sides
+of that boundary, so pairing them is the only safe way to transfer
+ownership across it.
+
+- `mdv_alloc(0)` returns a valid non-NULL pointer.
+- `NULL` return means allocation failure — a resolver callback that
+  gets NULL back from `mdv_alloc` should return `0` (decline) rather
+  than pass NULL as `*out_url`, since 1-with-NULL is a contract
+  violation.
 
 ## Assets
 
