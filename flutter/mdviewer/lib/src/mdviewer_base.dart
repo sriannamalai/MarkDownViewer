@@ -38,7 +38,16 @@ class Mdviewer {
   /// Parses [markdown] into a versioned document JSON, decoded to a Dart
   /// map. Feed the result to [renderDoc] to re-render without re-parsing
   /// (e.g. on a theme switch).
+  ///
+  /// Unlike [render] and [renderDoc], a resolver here is a permanent
+  /// error, not a not-yet-wired seam: there is no `mdv_parse_r` symbol —
+  /// resolution is a render-time concern, and parsing never resolves.
   Map<String, dynamic> parse(String markdown, {MdvOptions? options}) {
+    if (options?.resolver != null) {
+      throw ArgumentError(
+        'parse does not take a resolver (resolution is a render-time concern)',
+      );
+    }
     final json = _call2(_b.parse, markdown, options?.toJson());
     return jsonDecode(json) as Map<String, dynamic>;
   }

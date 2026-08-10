@@ -65,7 +65,13 @@ void main() {
     () {
       expect(
         () => mdv.renderDoc('{not valid json'),
-        throwsA(isA<MdviewerException>()),
+        throwsA(
+          isA<MdviewerException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('document'), contains('invalid JSON')),
+          ),
+        ),
       );
     },
   );
@@ -101,4 +107,23 @@ void main() {
       throwsA(isA<UnimplementedError>()),
     );
   });
+
+  test(
+    'parse with a resolver throws ArgumentError (permanent, not a Task-4 seam)',
+    () {
+      expect(
+        () => mdv.parse(
+          md,
+          options: MdvOptions(resolver: (kind, target) => null),
+        ),
+        throwsA(
+          isA<ArgumentError>().having(
+            (e) => e.message,
+            'message',
+            'parse does not take a resolver (resolution is a render-time concern)',
+          ),
+        ),
+      );
+    },
+  );
 }
