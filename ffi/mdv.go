@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"math"
 	"unsafe"
+
+	"github.com/sriannamalai/markdownviewer/internal/boundary"
 )
 
 // version is injected at build time via -ldflags "-X main.version=…".
@@ -127,7 +129,7 @@ func mdv_render(md *C.char, mdLen C.size_t, optsJSON *C.char, outHTML **C.char, 
 		if err != nil {
 			return nil, err
 		}
-		return renderImpl(src, goOpts(optsJSON))
+		return boundary.Render(src, goOpts(optsJSON), nil)
 	})
 }
 
@@ -141,7 +143,7 @@ func mdv_parse(md *C.char, mdLen C.size_t, optsJSON *C.char, outJSON **C.char, o
 		if err != nil {
 			return nil, err
 		}
-		return parseImpl(src, goOpts(optsJSON))
+		return boundary.Parse(src, goOpts(optsJSON))
 	})
 }
 
@@ -155,7 +157,7 @@ func mdv_render_doc(docJSON *C.char, jsonLen C.size_t, optsJSON *C.char, outHTML
 		if err != nil {
 			return nil, err
 		}
-		return renderDocImpl(doc, goOpts(optsJSON))
+		return boundary.RenderDoc(doc, goOpts(optsJSON), nil)
 	})
 }
 
@@ -170,9 +172,9 @@ func mdv_render_doc(docJSON *C.char, jsonLen C.size_t, optsJSON *C.char, outHTML
 func mdv_asset(name *C.char, out **C.char, outLen *C.size_t, outErr **C.char) C.int {
 	return call(out, outLen, outErr, func() ([]byte, error) {
 		if name == nil {
-			return assetImpl("")
+			return boundary.Asset("")
 		}
-		return assetImpl(C.GoString(name))
+		return boundary.Asset(C.GoString(name))
 	})
 }
 

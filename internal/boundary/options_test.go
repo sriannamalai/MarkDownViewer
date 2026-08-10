@@ -1,4 +1,4 @@
-package main
+package boundary
 
 import (
 	"strings"
@@ -67,21 +67,21 @@ func TestDecodeOptionsBadJSON(t *testing.T) {
 
 func TestToFacadeOptionsCount(t *testing.T) {
 	// Defaults map to just WithTheme("auto").
-	if n := len(defaultFFIOptions().toFacadeOptions()); n != 1 {
+	if n := len(defaultOptions().toFacadeOptions(nil)); n != 1 {
 		t.Errorf("defaults: want 1 option, got %d", n)
 	}
 	// Everything toggled maps to all 10 constructors: WithTheme, Fragment,
 	// AllowRawHTML, DisableMermaid, DisableMath, DisableHighlighting,
 	// WithSourceMap, WithThemeOverrides, WithMaxWidth, WithStylesheet
 	// (Mermaid/Math/Highlighting are zero-value false here).
-	o := ffiOptions{Theme: "dark", Fragment: true, AllowRawHTML: true,
+	o := options{Theme: "dark", Fragment: true, AllowRawHTML: true,
 		MaxWidth: "70ch", SourceMap: true,
 		ThemeOverrides: map[string]string{"--md-bg": "#123"}, Stylesheet: "body{}"}
-	if n := len(o.toFacadeOptions()); n != 10 {
+	if n := len(o.toFacadeOptions(nil)); n != 10 {
 		t.Errorf("full: want 10 options, got %d", n)
 	}
 	// Empty theme is skipped.
-	if n := len(ffiOptions{Mermaid: true, Math: true, Highlighting: true}.toFacadeOptions()); n != 0 {
+	if n := len(options{Mermaid: true, Math: true, Highlighting: true}.toFacadeOptions(nil)); n != 0 {
 		t.Errorf("empty theme: want 0 options, got %d", n)
 	}
 }

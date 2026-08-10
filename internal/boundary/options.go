@@ -1,4 +1,4 @@
-package main
+package boundary
 
 import (
 	"bytes"
@@ -7,12 +7,13 @@ import (
 	"io"
 
 	markdownviewer "github.com/sriannamalai/markdownviewer"
+	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
 )
 
-// ffiOptions is the version-1 options JSON accepted by every exported
+// options is the version-1 options JSON accepted by every exported
 // function. Fields irrelevant to an operation (e.g. theme for mdv_parse)
 // are decoded and ignored by that operation.
-type ffiOptions struct {
+type options struct {
 	Version        *int              `json:"version"`
 	Theme          string            `json:"theme"`
 	Fragment       bool              `json:"fragment"`
@@ -26,33 +27,36 @@ type ffiOptions struct {
 	Stylesheet     string            `json:"stylesheet"`
 }
 
-func defaultFFIOptions() ffiOptions {
-	return ffiOptions{Theme: "auto", Mermaid: true, Math: true, Highlighting: true}
+func defaultOptions() options {
+	return options{Theme: "auto", Mermaid: true, Math: true, Highlighting: true}
 }
 
 // decodeOptions strictly decodes the options JSON over the defaults.
 // nil, empty, or all-whitespace input yields the defaults.
-func decodeOptions(data []byte) (ffiOptions, error) {
-	o := defaultFFIOptions()
+func decodeOptions(data []byte) (options, error) {
+	o := defaultOptions()
 	if len(bytes.TrimSpace(data)) == 0 {
 		return o, nil
 	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&o); err != nil {
-		return ffiOptions{}, fmt.Errorf("options: %w", err)
+		return options{}, fmt.Errorf("options: %w", err)
 	}
 	if _, err := dec.Token(); err != io.EOF {
-		return ffiOptions{}, fmt.Errorf("options: trailing data after the options object")
+		return options{}, fmt.Errorf("options: trailing data after the options object")
 	}
 	if o.Version != nil && *o.Version != 1 {
-		return ffiOptions{}, fmt.Errorf("options: unsupported version %d (want 1)", *o.Version)
+		return options{}, fmt.Errorf("options: unsupported version %d (want 1)", *o.Version)
 	}
 	return o, nil
 }
 
-func (o ffiOptions) toFacadeOptions() []markdownviewer.Option {
+func (o options) toFacadeOptions(resolver htmlrender.Resolver) []markdownviewer.Option {
 	var opts []markdownviewer.Option
+	if resolver != nil {
+		opts = append(opts, markdownviewer.WithResolver(resolver))
+	}
 	if o.Theme != "" {
 		opts = append(opts, markdownviewer.WithTheme(o.Theme))
 	}

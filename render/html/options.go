@@ -5,6 +5,9 @@ package htmlrender
 // Resolver call.
 type ResolveKind int
 
+// These values are ABI-frozen: the FFI and WASM boundaries expose them
+// as bare ints (0=link, 1=image, 2=wiki-link). Append-only — never
+// reorder or renumber (see internal/boundary/kinds_test.go).
 const (
 	ResolveLink     ResolveKind = iota // a Link's Destination
 	ResolveImage                       // an Image's Destination
