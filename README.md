@@ -265,12 +265,16 @@ defensively and the option no-ops rather than emitting a defanged value.
 
 Every release ships prebuilt C-shared libraries (`libmdviewer`) for macOS
 (arm64/x86_64), Linux (amd64/arm64), and Windows (amd64) — see the
-release's `libmdviewer-*.zip` assets. Six thread-safe symbols:
-`mdv_render` (Markdown → HTML), `mdv_parse` (Markdown → versioned
+release's `libmdviewer-*.zip` assets. Nine thread-safe symbols — this is
+unchanged by the resolver callback, which runs synchronously on the
+calling thread: `mdv_render` (Markdown → HTML), `mdv_render_r` (same,
+plus a host `Resolver` callback), `mdv_parse` (Markdown → versioned
 document-AST JSON), `mdv_render_doc` (AST JSON → HTML, for
-parse-once/render-many), `mdv_asset` (embedded assets: mermaid/KaTeX bundles,
-theme+highlight CSS), `mdv_free`, and `mdv_version`. Options cross the
-boundary as a small JSON object mirroring this package's functional
+parse-once/render-many), `mdv_render_doc_r` (same, plus a `Resolver`
+callback), `mdv_asset` (embedded assets: mermaid/KaTeX bundles,
+theme+highlight CSS), `mdv_alloc` (library-heap allocator, for the
+resolver's returned URL), `mdv_free`, and `mdv_version`. Options cross
+the boundary as a small JSON object mirroring this package's functional
 options. Fragment-mode hosts can pull the embedded mermaid/KaTeX bundles
 and per-theme highlight CSS over the boundary via `mdv_asset` (v0.5); Go
 fragment hosts get the same via the `assets` package and
@@ -292,6 +296,13 @@ library and header — that's the API reference (ownership: every returned
 buffer is freed with `mdv_free`). Working consumers: `examples/c/`
 (the CI-gated harness) and `examples/dart/` (`dart:ffi`, the pattern a
 Flutter host uses). To build locally: `./scripts/build-ffi.sh`.
+
+Browser and Node hosts get the same rendering over WebAssembly instead of
+a C ABI: every release also ships `libmdviewer-<version>-wasm.zip`, an
+npm-ready ESM package (`import { loadMdviewer } from 'libmdviewer'`) with
+no bundler or native dependency required. See
+[`wasm/npm/README.md`](wasm/npm/README.md) for the JS API, and
+`./scripts/build-wasm.sh` to build locally.
 
 ## Security model
 
@@ -316,10 +327,12 @@ v0.2 adds block-level source spans, a versioned JSON codec for the
 `document` tree, `RenderDoc`/`ParseWith`/`WithParserConfig`, an exported
 `assets` package, and context-aware parse/render variants on top of v0.1's
 Go package API and `mdview` CLI. v0.4 adds the C-shared `libmdviewer` FFI
-described above, ahead of an eventual v1.0 that commits to API stability.
-See [`docs/Design.md`](docs/Design.md#roadmap) for what remains — WASM
-builds, mobile bindings, a native render-tree renderer, and incremental
-rendering if profiling demands it.
+described above, and v0.6 adds the WASM build and npm package described
+above plus the `Resolver` callback over both the C ABI and WASM,
+ahead of an eventual v1.0 that commits to API stability. See
+[`docs/Design.md`](docs/Design.md#roadmap) for what remains — mobile
+bindings, a native render-tree renderer, and incremental rendering if
+profiling demands it.
 
 ## License
 

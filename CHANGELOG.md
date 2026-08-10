@@ -7,6 +7,50 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [0.6.0] - 2026-08-10
+
+Adds a second non-Go embedding surface (WebAssembly) alongside the C ABI,
+and closes the FFI's biggest remaining gap: the `Resolver` callback now
+crosses both boundaries. Nothing changed for pure-Go consumers.
+
+### Added
+
+- **`mdv_render_r`, `mdv_render_doc_r`, `mdv_alloc` C symbols** (three
+  new exported symbols, six → nine; append-only ABI growth):
+  `mdv_render_r`/`mdv_render_doc_r` are the plain-render/render-doc
+  calls plus a host resolver callback, letting a `Resolver` cross the C
+  ABI as a function pointer for the first time. `kind` travels as an
+  ABI-frozen int (0 = link, 1 = image, 2 = wiki-link), matching the
+  `ResolveKind` values. `mdv_alloc(n)` allocates on the library's heap so
+  a resolver's returned URL can be freed with `mdv_free` without crossing
+  a CRT boundary on Windows. Same memory contract, panic containment, and
+  thread-safety as every other symbol — the resolver callback itself runs
+  synchronously on the calling thread, one call at a time per render.
+- **WASM build** (`GOOS=js GOARCH=wasm`, `wasm/`, built with
+  `scripts/build-wasm.sh`): the same rendering surface as the C ABI,
+  exposed as a plain ESM module (`wasm/npm/`) with no bundler or native
+  dependency required. The `Resolver` crosses this boundary as an
+  ordinary JS function rather than a marshalled callback. Every release
+  now also ships `libmdviewer-<version>-wasm.zip`, an npm-ready package
+  (`.github/workflows/release-ffi.yml`).
+- **Node harness** (`examples/node/harness.mjs`), CI-gated against the
+  freshly built wasm package — parity checks against the C harness plus
+  resolver-specific coverage (all three kinds, declined resolution
+  falling back to default handling, a throwing resolver failing the
+  render with the host error).
+- **Browser playground example** (`examples/web/`) demonstrating the
+  ESM module loaded directly in a page, no build step.
+
+### Changed
+
+- **Internal:** the JSON boundary (request/option decoding, operation
+  dispatch, response encoding) that used to live entirely inside `ffi/`
+  is now `internal/boundary`, a shared cgo-free package consumed by both
+  the C ABI main and the wasm main. No public Go API change.
+- `ffi/README.md` (packaged into release artifacts) documents the two
+  new symbols, the resolver callback signature, and the `mdv_alloc`
+  ownership contract.
+
 ## [0.5.0] - 2026-08-10
 
 Completes the fragment-host story surfaced by real-world FFI consumption:

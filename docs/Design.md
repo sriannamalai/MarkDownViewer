@@ -178,6 +178,22 @@ per-theme highlight CSS — closing the fragment-host gap where
 diagrams/math/highlighting were reachable only through full-page output.
 The registry is append-only, mirroring the Kind-value policy.
 
+v0.6 extracts the JSON boundary — request/option decoding, operation
+dispatch, response encoding — out of `ffi/` and into `internal/boundary`,
+so it's a shared, cgo-free package consumed by both the C ABI main
+(`ffi/`) and the `js/wasm` main (`wasm/`) instead of living only in the
+cgo layer. It also lets the `Resolver` callback cross both boundaries,
+each in the idiom native to its host: over the C ABI as a function
+pointer (`mdv_render_r`/`mdv_render_doc_r`) plus the `mdv_alloc`
+library-heap ownership contract for the resolver's returned URL, so
+freeing never crosses a CRT boundary on Windows; over the WASM boundary
+as a plain JS function, since `js/wasm` already marshals JS values
+without a C calling convention in between. Both crossings share the
+same `kind` encoding — 0 (link), 1 (image), 2 (wiki-link) — ABI-frozen
+like the `Kind` enum. See the "Resolver trust contract" safety bullet
+below for what a resolver is and isn't responsible for; that contract is
+unchanged by which boundary it crosses.
+
 ## Feature set
 
 CommonMark (via goldmark) plus: GFM tables, strikethrough, task lists,
@@ -301,15 +317,22 @@ v0.4 shipped the C-shared FFI (`.so`/`.dylib`/`.dll`), now that the
 `document` model has a stable wire format (JSON, pinned `Kind` values) to
 build a C ABI on top of — see the "FFI boundary" subsection above.
 
+v0.6 shipped the `js`/`wasm` build (`wasm/`, `scripts/build-wasm.sh`) over
+the same shared JSON boundary the C-shared FFI established, now factored
+out into `internal/boundary` and consumed by both cgo and wasm mains, with
+an npm-ready ESM wrapper (`wasm/npm/`) so browser and Node hosts load it
+like any other package. It also extends the `Resolver` callback across
+both non-Go boundaries — the C ABI (`mdv_render_r`/`mdv_render_doc_r`) and
+WASM (a plain JS function) — closing the gap the v0.4 FFI left open. See
+the "FFI boundary" subsection above.
+
 Toward v1.0, what remains, roughly in order:
 
-1. **WASM builds**, reusing the same JSON boundary the C-shared FFI
-   established.
-2. **Mobile bindings** (`gomobile` / Flutter FFI) on top of the FFI layer.
-3. **A native render-tree renderer** — for toolkit-native (non-webview)
+1. **Mobile bindings** (`gomobile` / Flutter FFI) on top of the FFI layer.
+2. **A native render-tree renderer** — for toolkit-native (non-webview)
    hosts, rendering directly from `document.Document` instead of through
    HTML.
-4. **Incremental rendering**, if profiling on real host workloads shows
+3. **Incremental rendering**, if profiling on real host workloads shows
    full re-render (even with parse-once/`RenderDoc`) is the bottleneck —
    not committed to; only worth doing if the numbers demand it.
 
