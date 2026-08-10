@@ -194,6 +194,14 @@ like the `Kind` enum. See the "Resolver trust contract" safety bullet
 below for what a resolver is and isn't responsible for; that contract is
 unchanged by which boundary it crosses.
 
+v0.7's mobile artifacts (`flutter/mdviewer`, `scripts/build-mobile.sh`)
+consume this same nine-symbol ABI unchanged — static (`c-archive`) on
+iOS, `c-shared` on Android, exactly the shape `ffi/` already produces for
+desktop hosts. The Flutter plugin talks to it over `dart:ffi`, with a
+per-call `NativeCallable.isolateLocal` bridging the `Resolver` callback
+the same way the C ABI defines it; no new binding layer or boundary
+crossing was needed on the Go side.
+
 ## Feature set
 
 CommonMark (via goldmark) plus: GFM tables, strikethrough, task lists,
@@ -326,13 +334,20 @@ both non-Go boundaries — the C ABI (`mdv_render_r`/`mdv_render_doc_r`) and
 WASM (a plain JS function) — closing the gap the v0.4 FFI left open. See
 the "FFI boundary" subsection above.
 
+v0.7 shipped mobile — a Flutter FFI plugin (`flutter/mdviewer`) and the
+release artifacts it consumes (`libmdviewer-<version>-ios.xcframework.zip`,
+`libmdviewer-<version>-android.zip`, built by `scripts/build-mobile.sh`).
+No new boundary was needed: the plugin binds the same nine-symbol ABI the
+C-shared FFI already exposes, static on iOS and `c-shared` on Android, over
+`dart:ffi` with `NativeCallable` bridging the `Resolver` callback. See the
+"FFI boundary" subsection above and `flutter/mdviewer/README.md`.
+
 Toward v1.0, what remains, roughly in order:
 
-1. **Mobile bindings** (`gomobile` / Flutter FFI) on top of the FFI layer.
-2. **A native render-tree renderer** — for toolkit-native (non-webview)
+1. **A native render-tree renderer** — for toolkit-native (non-webview)
    hosts, rendering directly from `document.Document` instead of through
    HTML.
-3. **Incremental rendering**, if profiling on real host workloads shows
+2. **Incremental rendering**, if profiling on real host workloads shows
    full re-render (even with parse-once/`RenderDoc`) is the bottleneck —
    not committed to; only worth doing if the numbers demand it.
 

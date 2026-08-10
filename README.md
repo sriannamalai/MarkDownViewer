@@ -304,6 +304,16 @@ no bundler or native dependency required. See
 [`wasm/npm/README.md`](wasm/npm/README.md) for the JS API, and
 `./scripts/build-wasm.sh` to build locally.
 
+Flutter/mobile hosts get a plugin, `flutter/mdviewer`, over the same
+nine-symbol C ABI instead of a new binding layer — static on iOS,
+`c-shared` on Android, consumed via `dart:ffi` with `NativeCallable` for
+the `Resolver` callback. Every release also ships the two mobile
+artifacts the plugin's `tool/fetch_binaries.sh` pulls down:
+`libmdviewer-<version>-ios.xcframework.zip` and
+`libmdviewer-<version>-android.zip`. See
+[`flutter/mdviewer/README.md`](flutter/mdviewer/README.md) for the Dart
+API, and `./scripts/build-mobile.sh` to build locally.
+
 ## Security model
 
 - **Sanitized by default.** Raw HTML in Markdown input is passed through
@@ -327,12 +337,12 @@ v0.2 adds block-level source spans, a versioned JSON codec for the
 `document` tree, `RenderDoc`/`ParseWith`/`WithParserConfig`, an exported
 `assets` package, and context-aware parse/render variants on top of v0.1's
 Go package API and `mdview` CLI. v0.4 adds the C-shared `libmdviewer` FFI
-described above, and v0.6 adds the WASM build and npm package described
-above plus the `Resolver` callback over both the C ABI and WASM,
-ahead of an eventual v1.0 that commits to API stability. See
-[`docs/Design.md`](docs/Design.md#roadmap) for what remains — mobile
-bindings, a native render-tree renderer, and incremental rendering if
-profiling demands it.
+described above, v0.6 adds the WASM build and npm package described
+above plus the `Resolver` callback over both the C ABI and WASM, and
+v0.7 adds the Flutter/mobile plugin described above, ahead of an
+eventual v1.0 that commits to API stability. See
+[`docs/Design.md`](docs/Design.md#roadmap) for what remains — a native
+render-tree renderer and incremental rendering if profiling demands it.
 
 ## License
 

@@ -67,3 +67,22 @@ jobs:
       - uses: actions/setup-go@v6
         with: {go-version: '1.26.x'}
       - run: ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME" ./scripts/build-mobile.sh all
+  flutter:
+    runs-on: macos-14
+    defaults:
+      run: {shell: bash}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with: {go-version: '1.26.x'}
+      - uses: subosito/flutter-action@v2
+        with: {channel: stable}
+      - run: ./scripts/build-ffi.sh
+      - run: flutter pub get
+        working-directory: flutter/mdviewer
+      - run: dart format --set-exit-if-changed .
+        working-directory: flutter/mdviewer
+      - run: flutter analyze
+        working-directory: flutter/mdviewer
+      - run: flutter test
+        working-directory: flutter/mdviewer

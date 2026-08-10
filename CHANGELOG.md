@@ -7,6 +7,52 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [0.7.0] - 2026-08-10
+
+Adds mobile as a third embedding surface alongside the C ABI and WASM: a
+Flutter FFI plugin binding the same nine-symbol ABI, plus the release
+artifacts and CI it needs. Nothing changed for existing Go/C/WASM
+consumers.
+
+### Added
+
+- **Mobile release artifacts** (`scripts/build-mobile.sh`): `libmdviewer`
+  built for iOS (`c-archive`, arm64 device + arm64 simulator, merged into
+  `libmdviewer.xcframework` via `xcodebuild -create-xcframework`) and
+  Android (`c-shared`, arm64-v8a + x86_64 `.so`s under `jniLibs/`). Every
+  release now also ships `libmdviewer-<version>-ios.xcframework.zip` and
+  `libmdviewer-<version>-android.zip` (`.github/workflows/release-ffi.yml`),
+  each bundling `LICENSE` and `ffi/README.md` alongside the binary, same
+  as the desktop C-shared zips.
+- **Flutter FFI plugin** (`flutter/mdviewer`): a typed `dart:ffi` binding
+  over the same nine-symbol C ABI — `render`/`parse`/`renderDoc`/`asset`,
+  a strict `MdvOptions` mirroring the boundary's options JSON, and a
+  `Resolver` callback bridged via a per-call
+  `ffi.NativeCallable.isolateLocal`, matching the C ABI's `mdv_render_r`/
+  `mdv_render_doc_r`/`mdv_alloc` contract (trusted-verbatim resolution,
+  decline via `null`, a thrown resolver declines the remainder and
+  rethrows after the call). Platform loading: the bundled `.so` on
+  Android, statically linked via `DynamicLibrary.process()` on iOS (the
+  podspec's `-force_load` plus an `EXCLUDED_ARCHS` workaround for the
+  arm64-only simulator slice), `MDVIEWER_LIBRARY_PATH` or a `dist/ffi/`
+  walk-up for host development on macOS/Linux. `tool/build_binaries.sh`
+  (build from source) and `tool/fetch_binaries.sh` (checksum-verified
+  release download) populate the platform binaries, which are never
+  committed. Not yet on pub.dev — `publish_to: none`, path-dependency
+  consumption only; publishing remains a separately gated step. 26 tests
+  against the host dylib.
+- **Example app** (`flutter/mdviewer/example`): a `webview_flutter` host
+  rendering mermaid, inline/block KaTeX math, a syntax-highlighted code
+  fence, a resolver-rewritten image, and a wiki-link, with a light/dark
+  theme toggle exercising `renderDoc`'s parse-once/render-many path.
+  Manually verified on iOS and Android simulators/emulators, light and
+  dark.
+- **CI:** a `mobile` job (`macos-14`) builds both mobile targets via
+  `scripts/build-mobile.sh all`, and a `flutter` job (`macos-14`,
+  `subosito/flutter-action@v2`) builds the host FFI library, then runs
+  `flutter pub get`/`dart format --set-exit-if-changed`/`flutter analyze`/
+  `flutter test` against `flutter/mdviewer`.
+
 ## [0.6.1] - 2026-08-10
 
 ### Fixed
