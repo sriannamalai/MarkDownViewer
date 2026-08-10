@@ -73,10 +73,11 @@ Contract:
   cannot detect it). A length that does not fit in a signed host `int`
   is a contract violation and fails the render rather than being
   truncated.
-- The library frees a non-NULL `*out_url` on **every** path, including
-  contract-violation paths (bad return code, oversized
-  `*out_url_len`): once the callback returns, a buffer it set is owned
-  by the library, so a misbehaving host cannot leak it.
+- Ownership of a non-NULL `*out_url` transfers to the library only when
+  the callback returns `1` or violates the contract (bad return code,
+  oversized `*out_url_len`); on decline (`0`) the library never reads
+  or frees the out params, so a host that allocated one before deciding
+  to decline must not set `*out_url` (or must free it itself).
 - `target` is **not NUL-terminated** and is **only valid for the
   duration of the call** — copy it if you need it afterward.
 - The callback runs **synchronously on the calling thread** during

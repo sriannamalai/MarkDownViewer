@@ -97,7 +97,6 @@ export function loadMdviewer(wasmSource) {
       );
       await Promise.race([ready, runExit]);
       runExit.catch(() => {}); // ready won the race; avoid an unhandled rejection if Go later exits
-      delete globalThis.__libmdviewer_onready;
       const raw = globalThis.__libmdviewer;
       return {
         version: () => raw.version(),
@@ -122,6 +121,8 @@ export function loadMdviewer(wasmSource) {
     } catch (err) {
       if (loadPromise === p) loadPromise = null;
       throw err;
+    } finally {
+      delete globalThis.__libmdviewer_onready;
     }
   })();
   loadPromise = p;

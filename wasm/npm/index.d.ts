@@ -39,7 +39,11 @@ export interface Mdviewer {
   asset(name: string): Uint8Array;
 }
 
-/** Load the wasm module. Singleton: repeat calls return the same promise. */
+/**
+ * Load the wasm module. Repeat calls return the same promise while a load
+ * is in flight and after it succeeds; a failed load is not cached, so a
+ * later call retries.
+ */
 export function loadMdviewer(
   wasmSource?: string | URL | ArrayBuffer | Uint8Array | WebAssembly.Module,
 ): Promise<Mdviewer>;
