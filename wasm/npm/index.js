@@ -61,51 +61,69 @@ function splitOptions(options) {
 export function loadMdviewer(wasmSource) {
   if (loadPromise) return loadPromise;
   const p = (async () => {
-    const go = new globalThis.Go();
-    const ready = new Promise((resolve) => {
-      globalThis.__libmdviewer_onready = resolve;
-    });
-    const instance = await instantiate(
-      wasmSource ?? new URL('./mdviewer.wasm', import.meta.url),
-      go.importObject,
-    );
-    // go.run()'s promise settles only when the Go program exits (normally
-    // never — main() blocks on select{}) or if starting/running it fails
-    // (e.g. a corrupt/mismatched wasm binary). Race it against `ready` so
-    // a bad module rejects loadMdviewer() with a useful error instead of
-    // hanging forever or crashing the process via an unhandled rejection.
-    const runExit = go.run(instance).then(
-      () => { throw new Error('libmdviewer: Go runtime exited before signalling ready'); },
-      (e) => { throw new Error('libmdviewer: wasm start failed: ' + (e && e.message ? e.message : e)); },
-    );
-    await Promise.race([ready, runExit]);
-    runExit.catch(() => {}); // ready won the race; avoid an unhandled rejection if Go later exits
-    delete globalThis.__libmdviewer_onready;
-    const raw = globalThis.__libmdviewer;
-    return {
-      version: () => raw.version(),
-      render(md, options) {
-        const { json, resolver } = splitOptions(options);
-        return unwrap(raw.render(String(md), json, resolver));
-      },
-      parse(md, options) {
-        const { json, resolver } = splitOptions(options);
-        if (resolver) throw new TypeError('parse does not take a resolver (resolution is a render-time concern)');
-        return JSON.parse(unwrap(raw.parse(String(md), json)));
-      },
-      renderDoc(doc, options) {
-        const { json, resolver } = splitOptions(options);
-        const docJSON = typeof doc === 'string' ? doc : JSON.stringify(doc);
-        return unwrap(raw.renderDoc(docJSON, json, resolver));
-      },
-      asset(name) {
-        return unwrap(raw.asset(String(name)));
-      },
-    };
+    // Cache-clearing on failure lives in this catch (not an external
+    // p.catch() attached below) so a fire-and-forget caller still gets a
+    // real unhandledRejection: attaching .catch() to `p` from outside
+    // would mark it "handled" the instant it's attached, defeating
+    // Node's crash-on-unhandled-rejection safety net for callers that
+    // never observe the rejection themselves.
+    try {
+      // Yield once before any synchronous work below. Without this, a
+      // synchronous throw (e.g. `new globalThis.Go()` failing) would run
+      // the catch block while still inside the `const p = (...)()` call
+      // expression — before `p` finishes initializing — and referencing
+      // `p` there would hit the temporal dead zone. Awaiting first
+      // guarantees this function has already suspended and returned its
+      // (pending) promise to be assigned to `p` before any throw can
+      // reach the catch below.
+      await Promise.resolve();
+      const go = new globalThis.Go();
+      const ready = new Promise((resolve) => {
+        globalThis.__libmdviewer_onready = resolve;
+      });
+      const instance = await instantiate(
+        wasmSource ?? new URL('./mdviewer.wasm', import.meta.url),
+        go.importObject,
+      );
+      // go.run()'s promise settles only when the Go program exits
+      // (normally never — main() blocks on select{}) or if
+      // starting/running it fails (e.g. a corrupt/mismatched wasm
+      // binary). Race it against `ready` so a bad module rejects
+      // loadMdviewer() with a useful error instead of hanging forever or
+      // crashing the process via an unhandled rejection.
+      const runExit = go.run(instance).then(
+        () => { throw new Error('libmdviewer: Go runtime exited before signalling ready'); },
+        (e) => { throw new Error('libmdviewer: wasm start failed: ' + (e && e.message ? e.message : e)); },
+      );
+      await Promise.race([ready, runExit]);
+      runExit.catch(() => {}); // ready won the race; avoid an unhandled rejection if Go later exits
+      delete globalThis.__libmdviewer_onready;
+      const raw = globalThis.__libmdviewer;
+      return {
+        version: () => raw.version(),
+        render(md, options) {
+          const { json, resolver } = splitOptions(options);
+          return unwrap(raw.render(String(md), json, resolver));
+        },
+        parse(md, options) {
+          const { json, resolver } = splitOptions(options);
+          if (resolver) throw new TypeError('parse does not take a resolver (resolution is a render-time concern)');
+          return JSON.parse(unwrap(raw.parse(String(md), json)));
+        },
+        renderDoc(doc, options) {
+          const { json, resolver } = splitOptions(options);
+          const docJSON = typeof doc === 'string' ? doc : JSON.stringify(doc);
+          return unwrap(raw.renderDoc(docJSON, json, resolver));
+        },
+        asset(name) {
+          return unwrap(raw.asset(String(name)));
+        },
+      };
+    } catch (err) {
+      if (loadPromise === p) loadPromise = null;
+      throw err;
+    }
   })();
   loadPromise = p;
-  p.catch(() => {
-    if (loadPromise === p) loadPromise = null;
-  });
   return p;
 }
