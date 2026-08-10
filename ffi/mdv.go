@@ -299,12 +299,11 @@ func cResolver(fn C.mdv_resolver_fn, userdata unsafe.Pointer) htmlrender.Resolve
 			C.free(unsafe.Pointer(outURL))
 			return u, true
 		default:
-			// Contract violation. Still free a buffer the host may have
-			// allocated before misreturning, so the violation error path
-			// cannot leak.
-			if outURL != nil {
-				C.free(unsafe.Pointer(outURL))
-			}
+			// No ownership transfer happened: out_url is only the
+			// library's to free when the callback returns 1. Freeing an
+			// arbitrary pointer a misbehaving host left here could be an
+			// invalid free (static/stack/foreign memory) — worse than the
+			// leak, which belongs to the host that violated the contract.
 			panic(fmt.Errorf("resolver contract violation: invalid return code %d (want 0 or 1)", int(rc)))
 		}
 	}

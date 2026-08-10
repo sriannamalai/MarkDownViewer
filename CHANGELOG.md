@@ -13,21 +13,34 @@ model and renderer options.
 
 - **FFI:** `cResolver` now guards the `out_url_len` `size_t → int`
   conversion (contract-violation error instead of a hypothetical 32-bit
-  truncation) and frees a non-NULL `*out_url` on every contract-violation
-  path, so a misbehaving host callback cannot leak.
-- **WASM wrapper:** option values that are `undefined` or functions now
-  throw a `TypeError` instead of being silently dropped by
-  `JSON.stringify`; a failed `loadMdviewer()` is no longer cached, so a
-  later call can retry after a corrupt-binary or network failure.
+  truncation) and frees the host's `*out_url` on every return-`1` path,
+  including one with an invalid (oversized) length — ownership transferred,
+  so the library owns and frees the buffer even though the render then
+  fails. On any other return code, no ownership transfer happened: the
+  library no longer touches `*out_url` at all. Freeing an unowned pointer
+  a misbehaving host left there could be an invalid free on
+  static/stack/foreign memory — strictly worse than the leak, which
+  belongs to the host that violated the contract.
+- **WASM wrapper:** option values that are `undefined`, functions, or
+  symbols now throw a `TypeError` instead of being silently dropped by
+  `JSON.stringify` — checked both at the top level and one level into
+  object-valued options (e.g. `themeOverrides`); a failed `loadMdviewer()`
+  is no longer cached, so a later call can retry after a corrupt-binary or
+  network failure.
 
 ### Changed
 
-- `ffi/README.md` documents the violation-path freeing rule, the
-  exact-length requirement on `out_url_len`, and the header's two
-  `-Wunused-function` warnings under `-Wall`; the packaged wasm README
-  documents load-retry semantics and the guarded Node-only dynamic
-  import. Both harnesses now cover the wiki-link resolve path and the
-  wasm harness covers corrupt-binary rejection + retry in a subprocess.
+- `ffi/README.md` documents the narrowed ownership rule (freed only on
+  return-`1` paths, never touched otherwise), the exact-length requirement
+  on `out_url_len`, and the header's two `-Wunused-function` warnings
+  under `-Wall`; the packaged wasm README documents load-retry semantics
+  and the guarded Node-only dynamic import. Both harnesses now cover the
+  wiki-link resolve path, the `out_url_len` MaxInt guard on a real
+  allocation, and the no-touch violation path (ASan-verified: the host
+  frees its own buffer with no double-free); the wasm harness covers
+  corrupt-binary rejection + retry in a subprocess (asserting rejection
+  and successful retry rather than exact message wording) plus the new
+  symbol/nested-object strictness checks.
 
 ## [0.6.0] - 2026-08-10
 

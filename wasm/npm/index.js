@@ -43,10 +43,16 @@ function splitOptions(options) {
   if (resolver !== null && typeof resolver !== 'function') {
     throw new TypeError('options.resolver must be a function');
   }
-  for (const [key, value] of Object.entries(rest)) {
-    if (value === undefined || typeof value === 'function') {
+  const assertSerializable = (key, value) => {
+    if (value === undefined || typeof value === 'function' || typeof value === 'symbol') {
       throw new TypeError(
         `options.${key} is not JSON-serializable; JSON.stringify would drop it silently`);
+    }
+  };
+  for (const [key, value] of Object.entries(rest)) {
+    assertSerializable(key, value);
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [k, v] of Object.entries(value)) assertSerializable(`${key}.${k}`, v);
     }
   }
   const json = Object.keys(rest).length === 0 ? null : JSON.stringify(rest);
@@ -122,6 +128,12 @@ export function loadMdviewer(wasmSource) {
       if (loadPromise === p) loadPromise = null;
       throw err;
     } finally {
+      // No per-attempt token guard needed here: a failed load's Go runtime
+      // cannot later call back into this hook. Both failure modes leave it
+      // dead — either it exited (runExit's first branch, before signalling
+      // ready) or the wasm instance never started running at all (runExit's
+      // second branch, start rejected) — so there is nothing left that could
+      // resolve a stale `ready` promise after we delete the hook below.
       delete globalThis.__libmdviewer_onready;
     }
   })();

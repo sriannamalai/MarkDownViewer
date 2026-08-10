@@ -18,12 +18,18 @@ struct resolver_state {
     int saw_kind[3];          /* index by kind 0/1/2 */
     char last_target[256];
     void *seen_userdata;
+    char *owned;               /* mode 7: buffer the host retains ownership of */
     int mode;                 /* 0: resolve images, decline rest
                                  1: resolve javascript: link (trust contract)
                                  2: invalid return code
                                  3: return 1 with NULL out_url
                                  4: resolve image to empty URL
-                                 5: resolve wiki-links, decline rest */
+                                 5: resolve wiki-links, decline rest
+                                 6: return 1 with an oversized out_url_len
+                                    after a real allocation (MaxInt guard)
+                                 7: invalid return code after allocating;
+                                    host retains ownership and frees its
+                                    own buffer (no-touch rule) */
 };
 
 static int test_resolver(int kind, const char *target, size_t target_len,
@@ -70,6 +76,21 @@ static int test_resolver(int kind, const char *target, size_t target_len,
         memcpy(buf, u, ul);
         *out_url = buf; *out_url_len = ul;
         return 1;
+    }
+    if (st->mode == 6 && kind == 1) {
+        char *buf = (char *)mdv_alloc(4);
+        if (!buf) return 0;
+        memcpy(buf, "abcd", 4);
+        *out_url = buf;
+        *out_url_len = (size_t)-1;  /* lie: SIZE_MAX */
+        return 1;
+    }
+    if (st->mode == 7 && kind == 1) {
+        st->owned = (char *)mdv_alloc(8);
+        if (st->owned) memcpy(st->owned, "leakless", 8);
+        *out_url = st->owned;
+        *out_url_len = 8;
+        return 42;  /* contract violation; library must NOT free out_url */
     }
     return 0;
 }
@@ -243,6 +264,32 @@ int main(void) {
     CHECK(rh && strstr(rh, "Wiki Page.md") == NULL,
           "resolved wiki-link does not fall back to .md default");
     mdv_free(rh); rh = NULL;
+
+    /* Mode 6: return 1 with an oversized out_url_len after a real
+     * allocation. Pins the MaxInt guard: the library must reject this
+     * as a contract violation (not read out of bounds), and since
+     * return code was 1, ownership DID transfer — the library frees
+     * the buffer itself. */
+    struct resolver_state st7_6; memset(&st7_6, 0, sizeof st7_6); st7_6.mode = 6;
+    rc = mdv_render_r((char *)rmd, rmd_len, NULL, test_resolver, &st7_6, &rh, &rl, &re);
+    CHECK(rc != 0 && rh == NULL, "oversized out_url_len after allocation fails render");
+    CHECK(re != NULL && strstr(re, "resolver") != NULL,
+          "oversized out_url_len error mentions the resolver");
+    mdv_free(re); re = NULL;
+
+    /* Mode 7: invalid return code after allocating. Pins the no-touch
+     * rule: no ownership transfer happened (return code wasn't 1), so
+     * the library must NOT free *out_url — the host retains ownership
+     * and frees its own buffer below. Under the old code (which freed
+     * a non-NULL out_url on any violation path) this sequence would
+     * double-free; under ASan that is the check that matters. */
+    struct resolver_state st7; memset(&st7, 0, sizeof st7); st7.mode = 7;
+    rc = mdv_render_r((char *)rmd, rmd_len, NULL, test_resolver, &st7, &rh, &rl, &re);
+    CHECK(rc != 0 && rh == NULL, "invalid return code after allocation fails render");
+    CHECK(re != NULL && strstr(re, "resolver") != NULL,
+          "invalid-return-after-allocation error mentions the resolver");
+    mdv_free(re); re = NULL;
+    mdv_free(st7.owned); /* host frees its own buffer; must not double-free */
 
     /* Cleanup: every returned buffer through mdv_free; NULL is a no-op. */
     mdv_free(html); mdv_free(doc); mdv_free(html2); mdv_free(frag);

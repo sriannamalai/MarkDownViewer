@@ -73,11 +73,17 @@ Contract:
   cannot detect it). A length that does not fit in a signed host `int`
   is a contract violation and fails the render rather than being
   truncated.
-- Ownership of a non-NULL `*out_url` transfers to the library only when
-  the callback returns `1` or violates the contract (bad return code,
-  oversized `*out_url_len`); on decline (`0`) the library never reads
-  or frees the out params, so a host that allocated one before deciding
-  to decline must not set `*out_url` (or must free it itself).
+- Ownership of a non-NULL `*out_url` transfers to the library **only**
+  when the callback returns `1` — including when `*out_url_len` turns
+  out to be invalid (oversized): the library still frees the buffer,
+  even though the render then fails. On **any other** return (`0`, or
+  a contract-violating code outside `{0, 1}`), the library never reads
+  or frees the out params — it has no ownership claim on a pointer the
+  callback didn't hand it via the `1` path. A host that allocates a
+  buffer and then declines, or returns an invalid code, keeps that
+  allocation: freeing it (or not setting `*out_url` at all) is the
+  host's responsibility, and freeing it inside the library would risk
+  an invalid free on memory the library never owned.
 - `target` is **not NUL-terminated** and is **only valid for the
   duration of the call** — copy it if you need it afterward.
 - The callback runs **synchronously on the calling thread** during

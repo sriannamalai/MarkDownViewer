@@ -86,6 +86,10 @@ throws(() => mdv.render(md, { bogusField: undefined }), 'bogusField',
   'undefined option value throws instead of vanishing');
 throws(() => mdv.render(md, { onClick: () => {} }), 'onClick',
   'function option value throws instead of vanishing');
+throws(() => mdv.render(md, { maxWidth: Symbol('x') }), 'maxWidth',
+  'symbol option value throws instead of vanishing');
+throws(() => mdv.render(md, { themeOverrides: { '--md-bg': undefined } }), 'themeOverrides.--md-bg',
+  'nested undefined override throws instead of vanishing');
 
 // Wiki-link RESOLVE path (kind 2), not just decline.
 const wikiResolved = mdv.render('[[Wiki Page]]', {
@@ -97,20 +101,29 @@ check(!wikiResolved.includes('Wiki Page.md'), 'resolved wiki-link does not fall 
 
 // Corrupt-wasm rejection + retry-after-failure, in a subprocess (the
 // singleton in THIS process already holds a good load).
+// The exact rejection wording depends on whether go.run() rejects or
+// throws synchronously in a given toolchain — that's not the contract
+// under test. What matters: the load rejects with *some* Error, and a
+// retry with the real binary succeeds afterward (rejection is not
+// cached). We still print the message for diagnostics.
 const sub = spawnSync(process.execPath, ['--input-type=module', '-e', `
   import { loadMdviewer } from ${JSON.stringify(new URL('../../dist/wasm/npm/index.js', import.meta.url).href)};
   const bad = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]); // magic+version only
   let rejected = false;
-  try { await loadMdviewer(bad); } catch (e) {
-    rejected = /wasm start failed|exited before/i.test(String(e.message));
+  try {
+    await loadMdviewer(bad);
+  } catch (e) {
+    rejected = e instanceof Error;
+    console.log('corrupt-wasm rejection message: ' + (e && e.message ? e.message : e));
   }
-  if (!rejected) { console.error('corrupt wasm did not reject usefully'); process.exit(1); }
+  if (!rejected) { console.error('corrupt wasm did not reject'); process.exit(1); }
   // Retry with the real binary must now succeed (rejection is not cached).
   const mdv = await loadMdviewer();
   if (!mdv.render('# retry', { fragment: true }).includes('<h1')) process.exit(1);
   console.log('subprocess ok');
   process.exit(0);
 `], { encoding: 'utf8', timeout: 60_000 });
+console.log((sub.stdout || '').trim());
 check(sub.status === 0 && sub.stdout.includes('subprocess ok'),
   `corrupt-wasm rejects + retry succeeds in subprocess [status ${sub.status}: ${(sub.stderr || '').trim()}]`);
 
