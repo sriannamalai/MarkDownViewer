@@ -3,7 +3,8 @@
 # (two spaces, matching `shasum -a 256` output — safe to paste directly).
 #
 # Entries are appended here at each release that ships mobile artifacts
-# (libmdviewer-ios-v<version>.zip, libmdviewer-android-v<version>.zip).
+# (libmdviewer-<version>-ios.xcframework.zip, libmdviewer-<version>-android.zip
+# — <version> has no leading "v", matching .github/workflows/release-ffi.yml).
 # fetch_binaries.sh refuses to download any zip without a matching entry,
 # so this file must be updated before consumers can fetch a given release.
 #
