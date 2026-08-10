@@ -12,6 +12,58 @@ static int failures = 0;
     else { printf("ok: %s\n", (msg)); } \
 } while (0)
 
+/* ---- resolver test support ---- */
+struct resolver_state {
+    int calls;
+    int saw_kind[3];          /* index by kind 0/1/2 */
+    char last_target[256];
+    void *seen_userdata;
+    int mode;                 /* 0: resolve images, decline rest
+                                 1: resolve javascript: link (trust contract)
+                                 2: invalid return code
+                                 3: return 1 with NULL out_url
+                                 4: resolve image to empty URL */
+};
+
+static int test_resolver(int kind, const char *target, size_t target_len,
+                         void *userdata, char **out_url, size_t *out_url_len) {
+    struct resolver_state *st = (struct resolver_state *)userdata;
+    st->calls++;
+    if (kind >= 0 && kind < 3) st->saw_kind[kind] = 1;
+    size_t n = target_len < sizeof(st->last_target) - 1 ? target_len : sizeof(st->last_target) - 1;
+    memcpy(st->last_target, target, n);
+    st->last_target[n] = '\0';
+    st->seen_userdata = userdata;
+
+    if (st->mode == 2) return 7;
+    if (st->mode == 3) { *out_url = NULL; return 1; }
+    if (st->mode == 4 && kind == 1) {
+        *out_url = (char *)mdv_alloc(0);
+        *out_url_len = 0;
+        return 1;
+    }
+    if (st->mode == 1 && kind == 0 && target_len >= 11 &&
+        memcmp(target, "javascript:", 11) == 0) {
+        const char *u = "javascript:alert(1)";
+        size_t ul = strlen(u);
+        char *buf = (char *)mdv_alloc(ul);
+        if (!buf) return 0;
+        memcpy(buf, u, ul);
+        *out_url = buf; *out_url_len = ul;
+        return 1;
+    }
+    if (st->mode == 0 && kind == 1) {
+        const char *u = "asset://img/photo.png";
+        size_t ul = strlen(u);
+        char *buf = (char *)mdv_alloc(ul);
+        if (!buf) return 0;
+        memcpy(buf, u, ul);
+        *out_url = buf; *out_url_len = ul;
+        return 1;
+    }
+    return 0;
+}
+
 int main(void) {
     const char *md = "# Hello *world*\n\n- [x] done\n";
     size_t md_len = strlen(md);
@@ -88,6 +140,88 @@ int main(void) {
     rc = mdv_asset(NULL, &asset, &asset_len, &asset_err);
     CHECK(rc != 0, "NULL asset name fails");
     mdv_free(asset_err); asset_err = NULL;
+
+    /* ---- Resolver callback (mdv_render_r / mdv_render_doc_r) ---- */
+    const char *rmd =
+        "![alt](img/photo.png)\n\n"
+        "[click](docs/guide.md)\n\n"
+        "[[Wiki Page]]\n\n"
+        "[evil](javascript:alert(1))\n";
+    size_t rmd_len = strlen(rmd);
+
+    /* Mode 0: images resolved, links/wiki declined -> defaults. */
+    struct resolver_state st0; memset(&st0, 0, sizeof st0); st0.mode = 0;
+    char *rh = NULL, *re = NULL; size_t rl = 0;
+    rc = mdv_render_r((char *)rmd, rmd_len, (char *)"{\"fragment\": true}",
+                      test_resolver, &st0, &rh, &rl, &re);
+    CHECK(rc == 0 && rh != NULL, "mdv_render_r succeeds with resolver");
+    CHECK(rh && strstr(rh, "src=\"asset://img/photo.png\"") != NULL,
+          "resolved image URL emitted verbatim");
+    CHECK(rh && strstr(rh, "href=\"docs/guide.md\"") != NULL,
+          "declined link takes default resolution");
+    CHECK(rh && strstr(rh, "Wiki Page.md") != NULL,
+          "declined wiki-link gets default .md resolution");
+    CHECK(rh && strstr(rh, "javascript:") == NULL,
+          "declined unsafe link is filtered by safeURL");
+    CHECK(st0.calls >= 4, "resolver called for every target");
+    CHECK(st0.saw_kind[0] && st0.saw_kind[1] && st0.saw_kind[2],
+          "resolver saw kinds 0 (link), 1 (image), 2 (wiki-link)");
+    CHECK(st0.seen_userdata == &st0, "userdata passed through untouched");
+    mdv_free(rh); rh = NULL;
+
+    /* Trust contract: a resolved URL bypasses safeURL. */
+    struct resolver_state st1; memset(&st1, 0, sizeof st1); st1.mode = 1;
+    rc = mdv_render_r((char *)rmd, rmd_len, (char *)"{\"fragment\": true}",
+                      test_resolver, &st1, &rh, &rl, &re);
+    CHECK(rc == 0 && rh && strstr(rh, "javascript:alert(1)") != NULL,
+          "resolved URL is trusted verbatim (bypasses safeURL)");
+    mdv_free(rh); rh = NULL;
+
+    /* Contract violations -> error, not crash. */
+    struct resolver_state st2; memset(&st2, 0, sizeof st2); st2.mode = 2;
+    rc = mdv_render_r((char *)rmd, rmd_len, NULL, test_resolver, &st2, &rh, &rl, &re);
+    CHECK(rc != 0 && rh == NULL, "invalid resolver return code fails render");
+    CHECK(re != NULL && strstr(re, "resolver") != NULL,
+          "invalid-return error mentions the resolver");
+    mdv_free(re); re = NULL;
+
+    struct resolver_state st3; memset(&st3, 0, sizeof st3); st3.mode = 3;
+    rc = mdv_render_r((char *)rmd, rmd_len, NULL, test_resolver, &st3, &rh, &rl, &re);
+    CHECK(rc != 0 && re != NULL && strstr(re, "resolver") != NULL,
+          "return 1 with NULL out_url fails render");
+    mdv_free(re); re = NULL;
+
+    /* Empty URL via mdv_alloc(0). */
+    void *z = mdv_alloc(0);
+    CHECK(z != NULL, "mdv_alloc(0) returns non-NULL");
+    mdv_free((char *)z);
+    struct resolver_state st4; memset(&st4, 0, sizeof st4); st4.mode = 4;
+    rc = mdv_render_r((char *)rmd, rmd_len, (char *)"{\"fragment\": true}",
+                      test_resolver, &st4, &rh, &rl, &re);
+    CHECK(rc == 0 && rh && strstr(rh, "src=\"\"") != NULL,
+          "empty resolved URL is representable");
+    mdv_free(rh); rh = NULL;
+
+    /* NULL resolver === plain variant, byte for byte. */
+    char *plain = NULL; size_t plain_len = 0; char *pe = NULL;
+    rc = mdv_render((char *)rmd, rmd_len, NULL, &plain, &plain_len, &pe);
+    char *viaR = NULL; size_t viaR_len = 0; char *ve = NULL;
+    int rc2 = mdv_render_r((char *)rmd, rmd_len, NULL, NULL, NULL, &viaR, &viaR_len, &ve);
+    CHECK(rc == 0 && rc2 == 0 && plain_len == viaR_len &&
+          memcmp(plain, viaR, plain_len) == 0,
+          "NULL resolver is byte-identical to mdv_render");
+    mdv_free(plain); mdv_free(viaR);
+
+    /* mdv_render_doc_r threads the resolver too. */
+    char *rdoc = NULL; size_t rdoc_len = 0; char *de = NULL;
+    rc = mdv_parse((char *)rmd, rmd_len, NULL, &rdoc, &rdoc_len, &de);
+    CHECK(rc == 0 && rdoc != NULL, "mdv_parse for render_doc_r succeeds");
+    struct resolver_state st5; memset(&st5, 0, sizeof st5); st5.mode = 0;
+    rc = mdv_render_doc_r(rdoc, rdoc_len, (char *)"{\"fragment\": true}",
+                          test_resolver, &st5, &rh, &rl, &re);
+    CHECK(rc == 0 && rh && strstr(rh, "src=\"asset://img/photo.png\"") != NULL,
+          "mdv_render_doc_r resolves via callback");
+    mdv_free(rh); mdv_free(rdoc);
 
     /* Cleanup: every returned buffer through mdv_free; NULL is a no-op. */
     mdv_free(html); mdv_free(doc); mdv_free(html2); mdv_free(frag);
