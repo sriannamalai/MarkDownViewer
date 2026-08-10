@@ -63,8 +63,17 @@ export function loadMdviewer(wasmSource) {
       wasmSource ?? new URL('./mdviewer.wasm', import.meta.url),
       go.importObject,
     );
-    go.run(instance); // resolves only on Go exit; do not await
-    await ready;
+    // go.run()'s promise settles only when the Go program exits (normally
+    // never — main() blocks on select{}) or if starting/running it fails
+    // (e.g. a corrupt/mismatched wasm binary). Race it against `ready` so
+    // a bad module rejects loadMdviewer() with a useful error instead of
+    // hanging forever or crashing the process via an unhandled rejection.
+    const runExit = go.run(instance).then(
+      () => { throw new Error('libmdviewer: Go runtime exited before signalling ready'); },
+      (e) => { throw new Error('libmdviewer: wasm start failed: ' + (e && e.message ? e.message : e)); },
+    );
+    await Promise.race([ready, runExit]);
+    runExit.catch(() => {}); // ready won the race; avoid an unhandled rejection if Go later exits
     delete globalThis.__libmdviewer_onready;
     const raw = globalThis.__libmdviewer;
     return {

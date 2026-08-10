@@ -46,7 +46,10 @@ console.log(mdv.render('# Hello *world*', { fragment: true }));
 `ArrayBuffer`/`Uint8Array`, a precompiled `WebAssembly.Module`, or
 nothing (defaults to `./mdviewer.wasm` next to `index.js`). It's a
 singleton — repeated calls return the same promise, so call it once and
-reuse the resolved `Mdviewer` object.
+reuse the resolved `Mdviewer` object. If `wasmSource` is corrupt or was
+built with a mismatched Go toolchain (so the Go runtime fails to start),
+the returned promise **rejects** with a descriptive `Error` — it never
+hangs forever and never crashes the process with an unhandled rejection.
 
 ### Bundlers
 
