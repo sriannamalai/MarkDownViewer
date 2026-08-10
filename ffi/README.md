@@ -40,6 +40,13 @@ switching). `mdv_render_r` and `mdv_render_doc_r` are their plain
 counterparts plus a host resolver callback (below); a NULL `resolver`
 behaves identically to `mdv_render` / `mdv_render_doc`.
 
+**Compiler note**: the generated `libmdviewer.h` embeds two static
+helper functions from the cgo preamble (`mdv_call_resolver`,
+`mdv_malloc_raw`). Hosts compiling with `-Wall` will see two
+`-Wunused-function` warnings from the header if they don't reference
+both — harmless; silence with `-Wno-unused-function` on the include or
+ignore.
+
 ## Resolver callback
 
 `mdv_render_r` and `mdv_render_doc_r` accept a host callback that
@@ -60,6 +67,16 @@ Contract:
   contract violation and **fails the render** with a descriptive error.
 - **1 with a NULL `*out_url`** is also a contract violation and fails
   the render.
+- **`*out_url_len` must be the exact byte length of the buffer** you
+  allocated — a length larger than the allocation causes an
+  out-of-bounds read (standard C contract territory; the library
+  cannot detect it). A length that does not fit in a signed host `int`
+  is a contract violation and fails the render rather than being
+  truncated.
+- The library frees a non-NULL `*out_url` on **every** path, including
+  contract-violation paths (bad return code, oversized
+  `*out_url_len`): once the callback returns, a buffer it set is owned
+  by the library, so a misbehaving host cannot leak it.
 - `target` is **not NUL-terminated** and is **only valid for the
   duration of the call** — copy it if you need it afterward.
 - The callback runs **synchronously on the calling thread** during

@@ -290,11 +290,21 @@ func cResolver(fn C.mdv_resolver_fn, userdata unsafe.Pointer) htmlrender.Resolve
 			if outURL == nil {
 				panic(fmt.Errorf("resolver contract violation: returned 1 with NULL out_url"))
 			}
+			if outLen > C.size_t(math.MaxInt) {
+				C.free(unsafe.Pointer(outURL))
+				panic(fmt.Errorf("resolver contract violation: out_url_len exceeds maximum"))
+			}
 			b := unsafe.Slice((*byte)(unsafe.Pointer(outURL)), int(outLen))
 			u := string(b) // copy before freeing
 			C.free(unsafe.Pointer(outURL))
 			return u, true
 		default:
+			// Contract violation. Still free a buffer the host may have
+			// allocated before misreturning, so the violation error path
+			// cannot leak.
+			if outURL != nil {
+				C.free(unsafe.Pointer(outURL))
+			}
 			panic(fmt.Errorf("resolver contract violation: invalid return code %d (want 0 or 1)", int(rc)))
 		}
 	}

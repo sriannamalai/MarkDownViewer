@@ -22,7 +22,8 @@ struct resolver_state {
                                  1: resolve javascript: link (trust contract)
                                  2: invalid return code
                                  3: return 1 with NULL out_url
-                                 4: resolve image to empty URL */
+                                 4: resolve image to empty URL
+                                 5: resolve wiki-links, decline rest */
 };
 
 static int test_resolver(int kind, const char *target, size_t target_len,
@@ -54,6 +55,15 @@ static int test_resolver(int kind, const char *target, size_t target_len,
     }
     if (st->mode == 0 && kind == 1) {
         const char *u = "asset://img/photo.png";
+        size_t ul = strlen(u);
+        char *buf = (char *)mdv_alloc(ul);
+        if (!buf) return 0;
+        memcpy(buf, u, ul);
+        *out_url = buf; *out_url_len = ul;
+        return 1;
+    }
+    if (st->mode == 5 && kind == 2) {
+        const char *u = "notes/Wiki Page.html";
         size_t ul = strlen(u);
         char *buf = (char *)mdv_alloc(ul);
         if (!buf) return 0;
@@ -222,6 +232,17 @@ int main(void) {
     CHECK(rc == 0 && rh && strstr(rh, "src=\"asset://img/photo.png\"") != NULL,
           "mdv_render_doc_r resolves via callback");
     mdv_free(rh); mdv_free(rdoc);
+
+    /* Wiki-link RESOLVE path (kind 2), not just decline. */
+    struct resolver_state st6; memset(&st6, 0, sizeof st6); st6.mode = 5;
+    rc = mdv_render_r((char *)rmd, rmd_len, (char *)"{\"fragment\": true}",
+                      test_resolver, &st6, &rh, &rl, &re);
+    CHECK(rc == 0 && rh != NULL, "mdv_render_r succeeds with wiki-resolving resolver");
+    CHECK(rh && strstr(rh, "href=\"notes/Wiki Page.html\"") != NULL,
+          "resolved wiki-link URL emitted verbatim");
+    CHECK(rh && strstr(rh, "Wiki Page.md") == NULL,
+          "resolved wiki-link does not fall back to .md default");
+    mdv_free(rh); rh = NULL;
 
     /* Cleanup: every returned buffer through mdv_free; NULL is a no-op. */
     mdv_free(html); mdv_free(doc); mdv_free(html2); mdv_free(frag);
