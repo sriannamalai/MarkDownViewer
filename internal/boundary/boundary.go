@@ -7,6 +7,7 @@
 package boundary
 
 import (
+	"encoding/json"
 	"fmt"
 
 	markdownviewer "github.com/sriannamalai/markdownviewer"
@@ -61,6 +62,8 @@ func RenderDoc(docJSON, optsJSON []byte, resolver markdownviewer.Resolver) ([]by
 // mode — so fragment hosts get working syntax highlighting by applying
 // the one file. Standalone theme-dark.css needs no light-rule
 // neutralization; that pairing concern exists only inside full pages.
+// theme-*.json carry the same palette as data (see themeJSON) so native
+// hosts don't have to parse CSS to recover colors.
 func Asset(name string) ([]byte, error) {
 	switch name {
 	case "mermaid.js":
@@ -75,8 +78,12 @@ func Asset(name string) ([]byte, error) {
 		return composedThemeCSS(theme.Light())
 	case "theme-dark.css":
 		return composedThemeCSS(theme.Dark())
+	case "theme-light.json":
+		return themeJSONAsset(theme.Light())
+	case "theme-dark.json":
+		return themeJSONAsset(theme.Dark())
 	}
-	return nil, fmt.Errorf("unknown asset %q (valid: base.css, katex.css, katex.js, mermaid.js, theme-dark.css, theme-light.css)", name)
+	return nil, fmt.Errorf("unknown asset %q (valid: base.css, katex.css, katex.js, mermaid.js, theme-dark.css, theme-dark.json, theme-light.css, theme-light.json)", name)
 }
 
 func composedThemeCSS(t theme.Theme) ([]byte, error) {
@@ -85,4 +92,26 @@ func composedThemeCSS(t theme.Theme) ([]byte, error) {
 		return nil, err
 	}
 	return []byte(t.CSS(":root") + "\n" + hl), nil
+}
+
+// themeJSON is the version-1 shape of the theme-*.json assets: the
+// theme's --md-* palette as data, for native hosts that render without
+// CSS. Generated from the same theme.Theme structs that produce
+// theme-*.css, so the two representations cannot drift. Output is
+// deterministic: struct fields marshal in declaration order and
+// encoding/json emits map keys sorted.
+type themeJSON struct {
+	Version     int               `json:"version"`
+	Mode        string            `json:"mode"` // "light" or "dark"
+	ChromaStyle string            `json:"chromaStyle"`
+	Vars        map[string]string `json:"vars"` // theme.Theme.Vars verbatim
+}
+
+func themeJSONAsset(t theme.Theme) ([]byte, error) {
+	return json.Marshal(themeJSON{
+		Version:     1,
+		Mode:        t.Name,
+		ChromaStyle: t.ChromaStyle,
+		Vars:        t.Vars,
+	})
 }

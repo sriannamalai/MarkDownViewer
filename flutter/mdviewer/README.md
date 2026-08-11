@@ -106,7 +106,9 @@ Four calls, mirroring the C ABI's `mdv_render` / `mdv_render_r` /
   `mdv_render_doc` the same way `render` picks between the two.
 - **`Mdviewer.instance.asset(name)`** — an embedded static asset
   (`mermaid.js`, `katex.js`, `katex.css`, `base.css`, `theme-light.css`,
-  `theme-dark.css`) as `Uint8List`, via `mdv_asset`. See `ffi/README.md`'s
+  `theme-dark.css`, plus `theme-light.json` / `theme-dark.json` — the
+  theme palette as version-1 JSON data for native/custom renderers) as
+  `Uint8List`, via `mdv_asset`. See `ffi/README.md`'s
   Assets table for the full registry and what the composed theme CSS
   bundles.
 - **`Mdviewer.instance.version`** — the linked library's version string

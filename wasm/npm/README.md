@@ -141,7 +141,9 @@ mdv.render(md, {
 `mdv.asset(name)` returns embedded static assets (as `Uint8Array`) so
 fragment-mode hosts can enable diagrams, math, and syntax highlighting
 without vendoring anything — `mermaid.js`, `katex.js`, `katex.css`,
-`base.css`, `theme-light.css`, `theme-dark.css`. Full-page output (the
+`base.css`, `theme-light.css`, `theme-dark.css` — plus
+`theme-light.json` / `theme-dark.json`, the theme palette as version-1
+JSON data for native/custom renderers. Full-page output (the
 default) already embeds everything; you only need `asset()` when
 rendering fragments into your own page. See
 [`ffi/README.md`](https://github.com/sriannamalai/markdownviewer/blob/main/ffi/README.md#assets) for the full registry

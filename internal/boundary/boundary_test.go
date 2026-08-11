@@ -2,10 +2,13 @@ package boundary
 
 import (
 	"bytes"
+	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
 	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
+	"github.com/sriannamalai/markdownviewer/theme"
 )
 
 const sampleMD = "# Hello *world*\n\nSome `code` here.\n"
@@ -151,12 +154,14 @@ func TestEmptyInputs(t *testing.T) {
 
 func TestAssetImpl(t *testing.T) {
 	markers := map[string][]string{
-		"mermaid.js":      {"mermaid"},
-		"katex.js":        {"katex"},
-		"katex.css":       {"@font-face", "data:font"},
-		"base.css":        {"--md-max-width"},
-		"theme-light.css": {"--md-bg", ".chroma"},
-		"theme-dark.css":  {"--md-bg", ".chroma"},
+		"mermaid.js":       {"mermaid"},
+		"katex.js":         {"katex"},
+		"katex.css":        {"@font-face", "data:font"},
+		"base.css":         {"--md-max-width"},
+		"theme-light.css":  {"--md-bg", ".chroma"},
+		"theme-dark.css":   {"--md-bg", ".chroma"},
+		"theme-light.json": {"--md-bg", `"version"`},
+		"theme-dark.json":  {"--md-bg", `"version"`},
 	}
 	for name, wants := range markers {
 		got, err := Asset(name)
@@ -188,14 +193,61 @@ func TestAssetImplThemesDiffer(t *testing.T) {
 	}
 }
 
+func TestAssetImplThemeJSON(t *testing.T) {
+	cases := []struct {
+		name string
+		want theme.Theme
+	}{
+		{"theme-light.json", theme.Light()},
+		{"theme-dark.json", theme.Dark()},
+	}
+	for _, tc := range cases {
+		got, err := Asset(tc.name)
+		if err != nil {
+			t.Fatalf("Asset(%q): %v", tc.name, err)
+		}
+		var decoded struct {
+			Version     int               `json:"version"`
+			Mode        string            `json:"mode"`
+			ChromaStyle string            `json:"chromaStyle"`
+			Vars        map[string]string `json:"vars"`
+		}
+		if err := json.Unmarshal(got, &decoded); err != nil {
+			t.Fatalf("Asset(%q): not valid JSON: %v", tc.name, err)
+		}
+		if decoded.Version != 1 {
+			t.Errorf("Asset(%q): version = %d, want 1", tc.name, decoded.Version)
+		}
+		if decoded.Mode != tc.want.Name {
+			t.Errorf("Asset(%q): mode = %q, want %q", tc.name, decoded.Mode, tc.want.Name)
+		}
+		if decoded.ChromaStyle != tc.want.ChromaStyle {
+			t.Errorf("Asset(%q): chromaStyle = %q, want %q", tc.name, decoded.ChromaStyle, tc.want.ChromaStyle)
+		}
+		if !reflect.DeepEqual(decoded.Vars, tc.want.Vars) {
+			t.Errorf("Asset(%q): vars = %v, want theme Vars %v", tc.name, decoded.Vars, tc.want.Vars)
+		}
+		// Deterministic: a second fetch is byte-identical.
+		again, err := Asset(tc.name)
+		if err != nil {
+			t.Fatalf("Asset(%q) second call: %v", tc.name, err)
+		}
+		if !bytes.Equal(got, again) {
+			t.Errorf("Asset(%q): two calls differ:\n%s\n%s", tc.name, got, again)
+		}
+	}
+}
+
 func TestAssetImplUnknown(t *testing.T) {
 	for _, name := range []string{"", "bogus.js", "Mermaid.js"} {
 		_, err := Asset(name)
 		if err == nil {
 			t.Fatalf("Asset(%q): want error", name)
 		}
-		if !strings.Contains(err.Error(), "mermaid.js") || !strings.Contains(err.Error(), "theme-dark.css") {
-			t.Errorf("Asset(%q): error does not list valid names: %v", name, err)
+		for _, valid := range []string{"mermaid.js", "theme-dark.css", "theme-light.json", "theme-dark.json"} {
+			if !strings.Contains(err.Error(), valid) {
+				t.Errorf("Asset(%q): error does not list valid name %q: %v", name, valid, err)
+			}
 		}
 	}
 }

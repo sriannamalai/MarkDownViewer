@@ -136,6 +136,8 @@ vendoring anything. Registry (append-only, case-sensitive):
 | `base.css` | structural stylesheet |
 | `theme-light.css` | light theme tokens + light syntax-highlight CSS |
 | `theme-dark.css` | dark theme tokens + dark syntax-highlight CSS |
+| `theme-light.json` | light palette as version-1 JSON data, for native/custom renderers |
+| `theme-dark.json` | dark palette as version-1 JSON data, for native/custom renderers |
 
 Full-page output (the default) already embeds everything; you only need
 `mdv_asset` when rendering fragments into your own page. Apply one

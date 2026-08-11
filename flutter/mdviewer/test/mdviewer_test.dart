@@ -60,6 +60,16 @@ void main() {
     expect(css, contains('.chroma'));
   });
 
+  test('asset(theme-light.json) is version-1 palette data', () {
+    final decoded =
+        jsonDecode(utf8.decode(mdv.asset('theme-light.json')))
+            as Map<String, dynamic>;
+    expect(decoded['version'], 1);
+    expect(decoded['mode'], 'light');
+    final vars = decoded['vars'] as Map<String, dynamic>;
+    expect(vars['--md-bg'], isNotEmpty);
+  });
+
   test(
     'bad doc JSON to renderDoc throws MdviewerException naming the problem',
     () {

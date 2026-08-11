@@ -163,6 +163,14 @@ int main(void) {
           "theme-dark.css includes chroma highlighting CSS");
     mdv_free(asset); asset = NULL;
 
+    rc = mdv_asset((char *)"theme-light.json", &asset, &asset_len, &asset_err);
+    CHECK(rc == 0 && asset != NULL && strstr(asset, "--md-bg") != NULL,
+          "theme-light.json carries the --md-bg palette token");
+    CHECK(asset != NULL && strstr(asset, "\"version\":1") != NULL &&
+          strstr(asset, "\"mode\":\"light\"") != NULL,
+          "theme-light.json is version-1 JSON with mode light");
+    mdv_free(asset); asset = NULL;
+
     rc = mdv_asset((char *)"bogus.js", &asset, &asset_len, &asset_err);
     CHECK(rc != 0 && asset_err != NULL && strstr(asset_err, "mermaid.js") != NULL,
           "unknown asset error lists valid names");

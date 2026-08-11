@@ -48,6 +48,11 @@ const themeCSS = new TextDecoder().decode(mdv.asset('theme-dark.css'));
 check(themeCSS.includes('--md-bg'), 'theme-dark.css has theme tokens');
 check(themeCSS.includes('.chroma'), 'theme-dark.css includes chroma highlight CSS');
 throws(() => mdv.asset('nope.css'), 'valid:', 'unknown asset error lists valid names');
+const themeData = JSON.parse(new TextDecoder().decode(mdv.asset('theme-light.json')));
+check(themeData.version === 1 && themeData.mode === 'light',
+  'theme-light.json is version-1 palette data with mode light');
+check(typeof themeData.vars === 'object' && typeof themeData.vars['--md-bg'] === 'string',
+  'theme-light.json vars carry the --md-bg token');
 
 // Resolver: resolve, decline, kinds, trust contract, throw.
 const rmd = '![alt](img/photo.png)\n\n[click](docs/guide.md)\n\n[[Wiki Page]]\n';
