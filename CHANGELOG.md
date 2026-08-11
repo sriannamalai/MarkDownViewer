@@ -7,6 +7,93 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [0.9.0] - 2026-08-11
+
+The native-render enabling train: clears the collisions a native
+render-tree renderer would otherwise hit — policy extraction, a
+highlighting seam, theme tokens as data, inline source spans, and parser
+configuration across every surface — each additive, with existing HTML
+output byte-identical except the one sourceMap-mode change called out
+under Changed. Plus a Flutter plugin↔library version handshake.
+
+### Added
+
+- **`resolve` package** — `Resolver`, `ResolveKind` (the ABI-frozen
+  0/1/2 ints, pinning test included), the `safeURL` scheme allowlist,
+  and the wiki-link `.md` default-resolution policy, extracted from
+  `render/html` so a future non-HTML renderer consumes the same
+  resolution policy without importing the HTML one. `render/html` keeps
+  type aliases and the facade re-exports are unchanged — no consumer
+  breaks, output byte-identical; `ffi`/`wasm` now import the facade
+  alias and drop their `render/html` dependency.
+- **`theme-light.json` / `theme-dark.json` assets** (append-only
+  registry growth, all surfaces via `mdv_asset`/`asset()`): the theme's
+  `--md-*` palette as version-1 JSON data
+  (`{"version", "mode", "chromaStyle", "vars"}`) so native hosts stop
+  parsing CSS to recover colors. Generated from the same `theme.Theme`
+  structs that produce `theme-*.css` — the two representations cannot
+  drift. Note `chromaStyle` carries the highlight style's *name*, not
+  resolved token colors (a highlight-colors-as-data asset would be a
+  separate, versioned addition).
+- **Inline-level source spans.** The parser now populates
+  `document.Span` on inline nodes — Emphasis, Strong, Strikethrough,
+  CodeSpan, Link, Image, WikiLink, MathInline, Text, HTMLInline — plus
+  ThematicBreak (previously always zero-span). Wire-compatible: `span`
+  stays omitempty in the JSON codec. One caveat: for delimited inline
+  containers the span covers the **content only** (goldmark keeps no
+  source segments for the `*`/`~~`/backtick/bracket delimiters);
+  MathInline includes its `$`/`$$` delimiters; autolinks, synthesized
+  text (emoji expansions, reference labels), and breaks keep the zero
+  Span — see `document.Span`'s doc comment for the full contract.
+- **Parser config + heading anchors across every surface.** The options
+  JSON (still version 1, additive) gains a nested `"parser"` object,
+  strictly decoded like the top level (exact-case, unknown-field
+  errors, named as `parser.<key>`): `commonmarkOnly` plus tristate
+  per-extension booleans (`tables`, `strikethrough`, `taskLists`,
+  `linkify`, `footnotes`, `definitionLists`, `frontMatter`, `emoji`,
+  `wikiLinks`, `math`, `admonitions`) — the same toggles Go-side
+  `parser.Config` has always offered, now reachable from C, WASM
+  (`options.parser`), and Flutter (`MdvOptions.parser`, a typed
+  `MdvParserOptions`). Also top-level `"headingAnchors"` (bool, default
+  `true`; Go: the previously orphaned `DisableHeadingAnchors` render
+  option) to render headings without slug `id`s.
+- **Flutter version handshake.** The first `Mdviewer.instance` access
+  reads `mdv_version()` and compares major.minor against the plugin's
+  own `mdviewerPluginVersion` (kept in sync with `pubspec.yaml` by a
+  test); a mismatched clean `X.Y.Z` release throws an
+  `MdviewerException` naming both versions and the likely fix
+  (`tool/fetch_binaries.sh` / rebuild the host dylib) — a clear skew
+  diagnosis instead of the "unknown field" boundary errors stale
+  binaries used to produce. Source builds (git-describe stamps) are
+  exempt by design, and `MDVIEWER_SKIP_VERSION_CHECK=1` skips the check
+  entirely — see the plugin README's "Version handshake" section.
+
+### Changed
+
+- **sourceMap mode: `<hr>` now carries `data-md-line`.** ThematicBreak
+  gained a real source span (see inline spans above), so
+  `WithSourceMap()` / `"sourceMap": true` output annotates thematic
+  breaks like every other top-level block. Output in sourceMap mode
+  differs from v0.8.1 by exactly this attribute; non-sourceMap output
+  is unchanged.
+- **Syntax highlighting split + cached.** `render/html`'s chroma
+  tokenise and HTML-format steps are now separate (the seam a native
+  renderer needs for (text, style) runs — not yet exported), with a
+  bounded, concurrency-safe LRU cache (~8 MB default) keyed on
+  (language, code hash, style) between them. Warm re-renders of
+  mostly-unchanged documents (theme flips, live preview) re-highlight
+  ~280x faster; cold renders are unchanged within noise, and cached
+  output is verified byte-identical to uncached.
+- Docs: a "Which surface do I use?" table and the v0.9 roadmap in the
+  root README, the parser-config/heading-anchor options folded into the
+  root README's options docs, a webview copy-button bridge recipe for
+  `codeHeader` (secure-context caveat; platform-channel pattern proven
+  in MDViewer.Mobile) in the root and plugin READMEs, a version-skew
+  note for CDN/cached loading in the wasm README, and the
+  `theme-*.json` schema line in `ffi/README.md`.
+- Test growth across the boundary surfaces: the C harness now runs 59
+  checks, the Node harness 42, and the Flutter plugin suite 53.
+
 ## [0.8.1] - 2026-08-11
 
 Security patch and release-pipeline hardening, from the post-v0.8.0

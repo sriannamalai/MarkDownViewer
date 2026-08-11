@@ -85,6 +85,12 @@ All four calls throw a plain `Error` on failure (parse errors, decode
 errors, or an internal panic — the wasm side is always contained, it
 never traps/crashes the module).
 
+`version()` returns the version embedded when `mdviewer.wasm` was built.
+When loading the binary from a CDN or a long-lived cache, check it
+matches the release you expect — a stale cached `mdviewer.wasm` next to
+newer wrapper code otherwise surfaces only as confusing downstream
+errors (e.g. "unknown field" on an option the older binary predates).
+
 ### Options
 
 Same strict version-1 options JSON as the C FFI and the rest of the

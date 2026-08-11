@@ -39,6 +39,18 @@ See [`docs/Design.md`](docs/Design.md) for the architecture and roadmap, and
 | Source map | Opt-in `data-md-line` attributes (`WithSourceMap()`) for editor↔preview scroll sync |
 | JSON document tree | `document.MarshalJSON`/`UnmarshalJSON` — versioned wire format with pinned `Kind` names |
 
+## Which surface do I use?
+
+One rendering core, five ways in — same output, same options:
+
+| Surface | Artifact | Use when |
+| --- | --- | --- |
+| Go package | `go get github.com/sriannamalai/markdownviewer` | You're writing Go — the richest API (functional options, `document` AST, streaming `RenderTo`) |
+| CLI | `cmd/mdview` (`go install`) | One-off conversions, shell pipelines, editor "open preview" hooks |
+| C ABI | `libmdviewer-<ver>-<os>-<arch>.zip` (release asset) | Any language with a C FFI — desktop apps (Swift, C#, Rust, Python, ...) |
+| WASM | `libmdviewer-<ver>-wasm.zip` (npm-ready ESM) | Browsers and Node — no native binary allowed or wanted |
+| Flutter plugin | `flutter/mdviewer` (path/git dependency) | Flutter mobile apps — typed Dart API over the C ABI, binaries fetched per release |
+
 ## Install
 
 ```bash
@@ -76,8 +88,29 @@ out, err := markdownviewer.Render(
 	markdownviewer.Fragment(),        // body-only HTML, no <html>/<head> wrapper
 	markdownviewer.AllowRawHTML(),    // trust the input; disables sanitization
 	markdownviewer.DisableMath(),     // skip KaTeX
+	markdownviewer.DisableHeadingAnchors(), // headings without slug ids
 )
 ```
+
+Which Markdown syntax extensions the *parser* enables is a separate,
+composable axis — `parser.Config` (every field independently toggleable),
+selected via `WithParserConfig` for `Render`, or `ParseWith` when
+parsing directly:
+
+```go
+import "github.com/sriannamalai/markdownviewer/parser"
+
+cfg := parser.CommonMarkOnly() // zero Config: no extensions
+cfg.Tables = true              // ... plus GFM tables
+out, err := markdownviewer.Render(src, markdownviewer.WithParserConfig(cfg))
+```
+
+`parser.Default()` is everything on (tables, strikethrough, task lists,
+linkify, footnotes, definition lists, front matter, emoji, wiki-links,
+math, admonitions); start from either preset and flip individual fields.
+The same toggles ride the options JSON to every non-Go surface as the
+nested `parser` object, alongside `headingAnchors` — see
+`ffi/README.md`'s Options JSON table.
 
 If you only need the parsed document model — for example to build your own
 renderer — use `Parse`:
@@ -266,6 +299,13 @@ out, err := markdownviewer.Render(src, markdownviewer.WithCodeHeader())
 
 Full pages also get a small inline clipboard script wiring the buttons;
 fragment hosts receive the markup only and wire their own click handler.
+Note the inline script uses `navigator.clipboard`, which needs a
+**secure context** — webviews fed via `loadHtmlString`/`srcdoc` are not
+one, so embedded hosts should bridge the button to a native clipboard
+call instead: a capture-phase click listener on `.md-code-copy` posting
+the code text over a platform channel. See "codeHeader in webviews" in
+[`flutter/mdviewer/README.md`](flutter/mdviewer/README.md) for the
+worked recipe.
 
 The default layout is fluid — no `max-width` constraint, so the page fills
 its container. Opt in to a constrained width with `WithMaxWidth` (any CSS
@@ -358,8 +398,14 @@ v0.2 adds block-level source spans, a versioned JSON codec for the
 Go package API and `mdview` CLI. v0.4 adds the C-shared `libmdviewer` FFI
 described above, v0.6 adds the WASM build and npm package described
 above plus the `Resolver` callback over both the C ABI and WASM, and
-v0.7 adds the Flutter/mobile plugin described above, ahead of an
-eventual v1.0 that commits to API stability. See
+v0.7 adds the Flutter/mobile plugin described above. v0.8 closes
+host-integration gaps found embedding the library in real apps
+(`extraCss`, `codeHeader`, Flutter pre-resolve helpers), and v0.9 is the
+native-render enabling train: renderer-agnostic resolve policy, split +
+cached syntax highlighting, theme palettes as JSON data, inline source
+spans, parser config across every surface, and the Flutter version
+handshake — clearing the way for the native render-tree renderer design,
+ahead of an eventual v1.0 that commits to API stability. See
 [`docs/Design.md`](docs/Design.md#roadmap) for what remains — a native
 render-tree renderer and incremental rendering if profiling demands it.
 

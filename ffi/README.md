@@ -139,6 +139,12 @@ vendoring anything. Registry (append-only, case-sensitive):
 | `theme-light.json` | light palette as version-1 JSON data, for native/custom renderers |
 | `theme-dark.json` | dark palette as version-1 JSON data, for native/custom renderers |
 
+The `theme-*.json` schema (version 1):
+`{"version": 1, "mode": "light"|"dark", "chromaStyle": "<chroma style
+name, e.g. github>", "vars": {"--md-bg": "#ffffff", ...}}` — the same
+`--md-*` palette `theme-*.css` sets, as data; note `chromaStyle` carries
+the highlight style's *name*, not resolved token colors.
+
 Full-page output (the default) already embeds everything; you only need
 `mdv_asset` when rendering fragments into your own page. Apply one
 `theme-*.css` per document view; if you ship both and switch at

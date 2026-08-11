@@ -382,6 +382,21 @@ JS on full pages) — plus Flutter-side pre-resolve helpers
 sync-resolver pattern for async vaults, and the `flutter-v<ver>` tag
 process for submodule consumers (CONTRIBUTING.md's Releasing section).
 
+v0.9 shipped the native-render enabling train — the collisions a native
+render-tree renderer would otherwise hit, cleared ahead of its design,
+with no behavior change to existing output: the renderer-agnostic
+`resolve` package (URL policy and wiki-link resolution out of
+`render/html`, so a non-HTML renderer never imports the HTML one), the
+chroma tokenise/format split in `render/html/highlight.go` (the seam a
+native renderer needs for (text, style) runs) with a bounded per-block
+highlight cache behind it, the theme palettes as version-1 JSON assets
+(`theme-light.json`/`theme-dark.json` — native hosts stop parsing CSS to
+recover colors), inline-level source spans on the document model
+(emphasis, links, code spans, math, ... — what selection mapping needs),
+`parser.Config` and heading-anchor control across every surface's
+options JSON, and a Flutter plugin↔library version handshake. The next
+step is the native render-tree renderer design itself.
+
 Toward v1.0, what remains, roughly in order:
 
 1. **A native render-tree renderer** — for toolkit-native (non-webview)
