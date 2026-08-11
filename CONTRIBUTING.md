@@ -70,6 +70,14 @@ canary test in `parser/frontmatter_test.go`
 (`TestUpstreamFrontmatterStillSwallowsUnterminated`), which fails loudly
 if upstream's swallow-on-unterminated behavior ever changes.
 
+Similarly, `parser/tbreak.go` shadows goldmark's stock thematic-break
+parser with a span-recording copy of its unexported `isThematicBreak`
+predicate (currently mirrored from `yuin/goldmark` v1.8.5). Any goldmark
+version bump requires re-diffing that predicate (and the parser's
+`Open`/`Continue` semantics) against upstream's `parser/thematic_break.go`
+— a silent upstream change would make the shadow parser diverge on
+inputs outside the pinned CommonMark suite.
+
 ## FFI (libmdviewer)
 
 `./scripts/build-ffi.sh` builds the C-shared library for your platform

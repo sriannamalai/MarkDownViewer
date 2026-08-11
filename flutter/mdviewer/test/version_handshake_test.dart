@@ -12,6 +12,16 @@ void main() {
       multiLine: true,
     ).firstMatch(pubspec)?[1];
     expect(version, mdviewerPluginVersion);
+    // The handshake null-asserts that the plugin's own version parses as a
+    // clean X.Y.Z release; a pre-release marker (e.g. `1.0.0-dev`) in the
+    // pubspec would turn every handshake into a bare TypeError. Pin it.
+    expect(
+      RegExp(r'^\d+\.\d+\.\d+$').hasMatch(mdviewerPluginVersion),
+      isTrue,
+      reason:
+          'mdviewerPluginVersion must stay a clean X.Y.Z release string '
+          '(the handshake null-asserts this)',
+    );
   });
 
   test('handshake passes against the real dylib on first library call', () {
