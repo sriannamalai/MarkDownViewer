@@ -176,6 +176,17 @@ func renderPage(w io.Writer, doc *document.Document, opts Options) error {
 		ew.write("<script>document.querySelectorAll('.math').forEach(function(el){" +
 			"katex.render(el.textContent,el,{displayMode:el.classList.contains('math-display'),throwOnError:false});});</script>\n")
 	}
+	if opts.CodeHeader {
+		// Inline, dependency-free clipboard wiring for the md-code-copy
+		// buttons codeBlock emits. Delegated from the document so it
+		// covers every block with one listener.
+		ew.write("<script>document.addEventListener('click',function(e){" +
+			"var b=e.target.closest('.md-code-copy');if(!b)return;" +
+			"var c=b.closest('.md-code').querySelector('pre');if(!c)return;" +
+			"navigator.clipboard.writeText(c.innerText).then(function(){" +
+			"var t=b.textContent;b.textContent='Copied';" +
+			"setTimeout(function(){b.textContent=t;},1200);});});</script>\n")
+	}
 	ew.write("</body>\n</html>\n")
 	return ew.err
 }

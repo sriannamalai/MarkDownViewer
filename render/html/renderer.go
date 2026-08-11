@@ -337,6 +337,19 @@ func (r *writer) checkbox(checked bool) {
 }
 
 func (r *writer) codeBlock(n *document.CodeBlock, attr string) {
+	if r.opts.CodeHeader {
+		// Header row above the code: language label (display casing is
+		// CSS's job) + copy button. Both emit paths below sit inside the
+		// wrapper; data-md-line stays on the block element it is on
+		// today — the wrapper carries no attributes.
+		lang := n.Language
+		if lang == "" {
+			lang = "code"
+		}
+		r.raw(`<div class="md-code"><div class="md-code-header"><span class="md-code-lang">` +
+			esc(lang) + `</span><button type="button" class="md-code-copy">Copy</button></div>`)
+		defer r.raw("</div>\n")
+	}
 	if r.opts.Highlight {
 		var b strings.Builder
 		if highlight(&b, n.Code, n.Language) {

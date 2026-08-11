@@ -114,6 +114,23 @@ func TestWithExtraCSS(t *testing.T) {
 	}
 }
 
+func TestWithCodeHeader(t *testing.T) {
+	src := []byte("```shell\necho hi\n```\n")
+	out, _ := Render(src, WithCodeHeader())
+	s := string(out)
+	for _, want := range []string{`<div class="md-code">`, `<span class="md-code-lang">shell</span>`, `class="md-code-copy"`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("WithCodeHeader output missing %q", want)
+		}
+	}
+	// The base stylesheet always carries .md-code selectors; absence is
+	// judged on the emitted markup, not the CSS.
+	plain, _ := Render(src)
+	if strings.Contains(string(plain), `<div class="md-code">`) {
+		t.Error("md-code wrapper must not appear without WithCodeHeader")
+	}
+}
+
 // TestDefaultLayoutIsFluid is the v0.3 behavior-change guard: the page no
 // longer carries a fixed max-width by default (theme/base.css now reads
 // "max-width: var(--md-max-width, none)"), so a plain Render has no

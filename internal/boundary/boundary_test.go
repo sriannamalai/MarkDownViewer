@@ -56,6 +56,28 @@ func TestRenderImplExtraCSSWrongCaseRejected(t *testing.T) {
 	}
 }
 
+func TestRenderImplCodeHeader(t *testing.T) {
+	src := []byte("```shell\necho hi\n```\n")
+	html, err := Render(src, []byte(`{"codeHeader": true}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`<div class="md-code">`, `<span class="md-code-lang">shell</span>`, "md-code-copy"} {
+		if !bytes.Contains(html, []byte(want)) {
+			t.Errorf("codeHeader output missing %q", want)
+		}
+	}
+	plain, err := Render(src, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The base stylesheet always carries .md-code selectors; absence is
+	// judged on the emitted markup, not the CSS.
+	if bytes.Contains(plain, []byte(`<div class="md-code">`)) {
+		t.Error("md-code wrapper must not appear without codeHeader")
+	}
+}
+
 func TestParseImpl(t *testing.T) {
 	doc, err := Parse([]byte(sampleMD), nil)
 	if err != nil {

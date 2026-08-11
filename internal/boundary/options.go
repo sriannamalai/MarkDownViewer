@@ -28,6 +28,7 @@ type options struct {
 	ThemeOverrides map[string]string `json:"themeOverrides"`
 	Stylesheet     string            `json:"stylesheet"`
 	ExtraCSS       string            `json:"extraCss"`
+	CodeHeader     bool              `json:"codeHeader"`
 }
 
 // knownOptionKeys holds the exact JSON keys of options, derived from the
@@ -119,6 +120,9 @@ func (o options) toFacadeOptions(resolver htmlrender.Resolver) []markdownviewer.
 	}
 	if o.ExtraCSS != "" {
 		opts = append(opts, markdownviewer.WithExtraCSS(o.ExtraCSS))
+	}
+	if o.CodeHeader {
+		opts = append(opts, markdownviewer.WithCodeHeader())
 	}
 	return opts
 }

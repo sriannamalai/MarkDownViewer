@@ -182,6 +182,21 @@ func TestExtraCSSBreakoutPrevention(t *testing.T) {
 	}
 }
 
+func TestCodeHeaderPageIncludesCopyScript(t *testing.T) {
+	const md = "```shell\necho hi\n```\n"
+	on := render(t, md, func(o *Options) {
+		o.Fragment = false
+		o.CodeHeader = true
+	})
+	if !strings.Contains(on, "md-code-copy") || !strings.Contains(on, "navigator.clipboard.writeText") {
+		t.Fatalf("CodeHeader page must include the copy-button script: %q", on)
+	}
+	off := render(t, md, func(o *Options) { o.Fragment = false })
+	if strings.Contains(off, "navigator.clipboard") {
+		t.Fatalf("copy script must be absent when CodeHeader is off: %q", off)
+	}
+}
+
 func TestFragmentModeIgnoresCSS(t *testing.T) {
 	got := render(t, "# Hi\n", func(o *Options) {
 		o.Fragment = true

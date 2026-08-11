@@ -37,6 +37,7 @@ type Options struct {
 	Stylesheet     string            // non-empty replaces theme.BaseCSS() entirely; emitted into the page's <style> element with </style sequences stripped defensively
 	ExtraCSS       string            // appended after whatever base styling applied (base+theme, or Stylesheet when set); sanitized like Stylesheet
 	SourceMap      bool              // annotate top-level blocks with data-md-line attributes
+	CodeHeader     bool              // wrap code blocks with a header row (language label + copy button); full pages also get an inline clipboard script
 }
 
 // DefaultOptions returns the recommended Options: full-page output, light

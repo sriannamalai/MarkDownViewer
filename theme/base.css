@@ -104,6 +104,52 @@ body.markdown-body {
   font-size: 100%;
 }
 
+/* Opt-in code-block header (codeHeader option): a hairline-separated row
+ * above the code carrying the language label and a Copy button. The
+ * wrapper takes over the block's frame; the pre flattens into it. */
+.markdown-body .md-code {
+  background: var(--md-code-bg);
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.markdown-body .md-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--md-border);
+}
+
+.markdown-body .md-code-lang {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--md-quote-fg);
+}
+
+.markdown-body .md-code-copy {
+  font: inherit;
+  font-size: 12px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--md-quote-fg);
+}
+
+.markdown-body .md-code-copy:hover {
+  color: var(--md-accent);
+}
+
+.markdown-body .md-code pre {
+  margin-bottom: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
 .markdown-body blockquote {
   border-left: 4px solid var(--md-border);
   color: var(--md-quote-fg);

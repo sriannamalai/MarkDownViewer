@@ -205,6 +205,17 @@ func WithExtraCSS(css string) Option {
 	return func(c *config) { c.render.ExtraCSS = css }
 }
 
+// WithCodeHeader wraps each rendered code block in a header row carrying a
+// language label (the fence language, or "code" when unlabeled) and a Copy
+// button, using the md-code / md-code-header / md-code-lang / md-code-copy
+// classes styled by the base stylesheet. Live mermaid diagrams and math are
+// not wrapped; their engine-disabled plain-code fallbacks are. Full pages
+// also get a small inline clipboard script wiring the buttons; fragment
+// hosts receive the markup and wire their own handler.
+func WithCodeHeader() Option {
+	return func(c *config) { c.render.CodeHeader = true }
+}
+
 // WithParserConfig selects which Markdown extensions the parser enables
 // when Render/RenderTo (and their Context variants) parse the source.
 // It has no effect on RenderDoc, which receives an already-parsed tree.
