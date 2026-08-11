@@ -16,7 +16,7 @@ themed, in a `WebViewWidget`.
 ## Status
 
 Pre-pub.dev. `pubspec.yaml` tracks the monorepo release version
-(currently `0.8.0`) and carries
+(currently `0.9.0`) and carries
 `publish_to: none` — this plugin is consumed as a path/git dependency
 today; publishing to pub.dev is a separately gated step (see the
 monorepo's `docs/Design.md` roadmap and `CHANGELOG.md`).
@@ -62,7 +62,7 @@ them:
   ```
 
   (During a pre-release window — `pubspec.yaml` already bumped but the
-  release not yet cut — set `MDVIEWER_VERSION=0.7.0` (the latest
+  release not yet cut — set `MDVIEWER_VERSION=0.8.1` (the latest
   released version) or the default invocation fails: there is no
   release, and no checksum entry, for the bumped version yet.)
 
@@ -167,6 +167,59 @@ Two options landed in v0.9.0:
   `render` and `parse`; `renderDoc` (already-parsed document) decodes
   and ignores it. Note `parser.math` gates `$x$` parsing while the
   top-level `math` gates KaTeX rendering.
+
+## codeHeader in webviews: the copy-button bridge
+
+The `codeHeader` full-page copy script uses `navigator.clipboard`, which
+browsers only expose in a **secure context** — and a webview fed via
+`loadHtmlString`/`srcdoc` is not one, so the Copy button silently no-ops
+there. The fix is a host bridge: inject a capture-phase click listener
+that posts the code text over a platform channel, and write the clipboard
+natively. With `webview_flutter`:
+
+```dart
+controller.addJavaScriptChannel('CodeCopy',
+    onMessageReceived: (m) => Clipboard.setData(ClipboardData(text: m.message)));
+// After the page loads, shadow the built-in handler (capture phase runs first):
+controller.runJavaScript('''
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.md-code-copy');
+    if (!btn) return;
+    e.stopPropagation();
+    const pre = btn.closest('.md-code')?.querySelector('pre');
+    if (pre) CodeCopy.postMessage(pre.innerText);
+  }, true);
+''');
+```
+
+This is the CodeCopy bridge pattern the MDViewer.Mobile app proved
+on-device (iOS + Android). Fragment hosts wire the same listener — minus
+the `stopPropagation`, since there is no built-in handler to shadow.
+
+## Version handshake
+
+The first `Mdviewer.instance` access reads `mdv_version()` from the
+loaded library and compares major.minor against this plugin's own version
+(`mdviewerPluginVersion`, kept in sync with `pubspec.yaml` by a test). A
+mismatched clean release — stale fetched binaries next to a newer plugin,
+or vice versa — throws an `MdviewerException` naming both versions up
+front, instead of the confusing downstream boundary errors ("unknown
+field ...") version skew otherwise produces. Likely fix: re-run
+`tool/fetch_binaries.sh` (or `tool/build_binaries.sh`), or rebuild the
+host dylib with `scripts/build-ffi.sh`.
+
+Two deliberate escapes:
+
+- **Source builds are exempt.** A library version that is not a clean
+  `X.Y.Z` (git-describe stamps like `0.8.1-6-gae98975`, `dev`, or a bare
+  commit hash) was built from source alongside the checkout; strict
+  matching would reject every pre-tag development build. Release
+  artifacts are always stamped clean `X.Y.Z`, so real skew is caught.
+- **`MDVIEWER_SKIP_VERSION_CHECK=1`** in the process environment skips
+  the check entirely. This is also the escape for the pre-release window
+  described under "Populating the native binaries" (plugin version
+  already bumped, latest release still older) when fetching rather than
+  building from source.
 
 ## Resolver contract
 

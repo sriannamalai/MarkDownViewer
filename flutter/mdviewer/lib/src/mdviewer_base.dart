@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:ffi' as ffi;
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart' as pkgffi;
@@ -8,13 +9,27 @@ import 'bindings.dart';
 import 'exceptions.dart';
 import 'library_loader.dart';
 import 'options.dart';
+import 'version_check.dart';
 
 /// Entry point for the mdviewer FFI plugin.
 class Mdviewer {
   Mdviewer._(this._b);
   static Mdviewer? _instance;
-  static Mdviewer get instance =>
-      _instance ??= Mdviewer._(MdvBindings(openMdviewerLibrary()));
+
+  /// The singleton instance, created (and its native library loaded) on
+  /// first access. That first access also runs the plugin↔library version
+  /// handshake — see [checkVersionHandshake] for the contract, the
+  /// mismatch [MdviewerException], and the `MDVIEWER_SKIP_VERSION_CHECK=1`
+  /// escape hatch. A handshake failure leaves no instance cached, so a
+  /// later access (e.g. after fixing the binaries) retries from scratch.
+  static Mdviewer get instance {
+    final existing = _instance;
+    if (existing != null) return existing;
+    final created = Mdviewer._(MdvBindings(openMdviewerLibrary()));
+    checkVersionHandshake(created.version, environment: Platform.environment);
+    return _instance = created;
+  }
+
   final MdvBindings _b;
 
   /// Library version (embedded at build time).
