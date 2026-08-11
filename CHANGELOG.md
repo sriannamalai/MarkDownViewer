@@ -7,6 +7,46 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [0.8.1] - 2026-08-11
+
+Security patch and release-pipeline hardening, from the post-v0.8.0
+end-to-end reanalysis.
+
+### Security
+
+- **Admonition titles are now HTML-escaped.** The admonition *title* was
+  emitted unescaped (the class attribute was already escaped). Unreachable
+  from markdown input — the parser constrains admonition variants to a
+  fixed set — but `RenderDoc`, `mdv_render_doc`, and the WASM/Flutter
+  `renderDoc` accept caller-supplied document JSON, where a hostile
+  `variant` could inject script through the default sanitized render path.
+  Hosts that render document JSON from untrusted or externally-stored
+  sources should upgrade. Regression tests cover the renderer and the
+  boundary attack path, and a new fuzz target (`FuzzRenderDocJSON`)
+  continuously exercises hostile document JSON in fragment mode.
+- `WithThemeOverrides` documentation now states plainly that override
+  *values* are host-trusted CSS: only `</style` is stripped, and a value
+  can close the `:root{}` block and inject arbitrary rules. Hosts must not
+  echo untrusted data into override values. (Documentation only; behavior
+  unchanged.)
+
+### Changed
+
+- **Release artifacts are now smoke-tested before upload**: the C harness
+  runs against the built library natively on darwin-arm64, linux-amd64,
+  and linux-arm64, and under Rosetta for the cross-compiled darwin-amd64;
+  the Node harness runs against the built WASM package. windows-amd64 is
+  harness-covered per-commit in CI; iOS/Android remain build-only (no
+  runner can execute them).
+- **Every release now ships a `SHA256SUMS` asset** covering all eight
+  artifact zips (previously only the two mobile zips were pinned, in
+  `flutter/mdviewer/tool/checksums.txt`, which continues unchanged).
+- CI hardening: workflow token restricted to `contents: read`, the
+  third-party Flutter action is pinned by commit SHA, and a new browser
+  job loads the WASM playground in headless Chromium (Playwright),
+  asserting mermaid, KaTeX, and resolver rendering actually execute —
+  previously the browser path had no automated coverage.
+
 ## [0.8.0] - 2026-08-11
 
 Closes the host-integration gaps ledgered while embedding the library in
