@@ -47,13 +47,18 @@
 // host-side diffing / itemized rebuilds), which also means two blocks
 // with byte-identical source share an id — hosts needing unique keys
 // disambiguate by position among equal ids. When no source bytes are
-// available for a block (Options.Source is nil — e.g. building from
-// decoded doc JSON — or the node carries the zero span), the id falls
-// back to hex(sha256(kind + ":" + ordinal))[:16], where ordinal is the
-// block's 0-based position in a document-order count of every
-// tree-emitted block (list items and footnotes included); fallback ids
-// are deterministic for a given document but positional, not
-// content-stable.
+// available for a block (Options.Source is empty or nil — e.g.
+// building from decoded doc JSON — or the node carries the zero span),
+// the id falls back to
+// hex(sha256("\x00mdv-fallback\x00" + kind + ":" + ordinal))[:16],
+// where ordinal is the block's 0-based position in a document-order
+// count of every tree-emitted block (list items and footnotes
+// included). The NUL-delimited prefix domain-separates the fallback
+// preimage from the content-hash form — source bytes can never spell
+// it, since decoded markdown contains no NUL — so a block whose source
+// literally reads e.g. "list:2" cannot collide with a fallback id.
+// Fallback ids are deterministic for a given document but positional,
+// not content-stable.
 package tree
 
 import "github.com/sriannamalai/markdownviewer/document"

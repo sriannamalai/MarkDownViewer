@@ -268,7 +268,7 @@ func blockOut(b Block) (any, error) {
 		if b.Runs != nil {
 			runs = make([]wRun, 0, len(b.Runs))
 			for _, r := range b.Runs {
-				runs = append(runs, wRun{Text: r.Text, TokenType: r.TokenType})
+				runs = append(runs, wRun(r))
 			}
 		}
 		return &wCodeBlock{wHead: head(document.KindCodeBlock, b.Span, b.ID),

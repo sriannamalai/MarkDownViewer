@@ -39,9 +39,10 @@ type Options struct {
 
 	// Source is the markdown source doc was parsed from, used to derive
 	// content-hash block ids from node spans (see "Block identity" in
-	// the package documentation). Nil is valid — e.g. when building from
-	// decoded doc JSON with no source at hand — and switches every block
-	// to the deterministic kind+ordinal fallback id.
+	// the package documentation). Empty or nil is valid — e.g. when
+	// building from decoded doc JSON with no source at hand — and
+	// switches every block to the deterministic kind+ordinal fallback
+	// id.
 	Source []byte
 }
 
@@ -97,7 +98,13 @@ func (b *builder) id(kind document.Kind, span document.Span) string {
 		sum := sha256.Sum256(src[span.StartOffset:span.EndOffset])
 		return hex.EncodeToString(sum[:8])
 	}
-	sum := sha256.Sum256([]byte(kind.String() + ":" + strconv.Itoa(ord)))
+	// The fallback preimage is domain-separated from the content-hash
+	// form (which hashes raw span bytes): without the prefix, a block
+	// whose source bytes literally spell e.g. "list:2" would collide
+	// with a fallback id. NUL cannot appear in decoded markdown source
+	// (invalid UTF-8 is replaced before parsing), so the prefix is
+	// unreachable from content.
+	sum := sha256.Sum256([]byte("\x00mdv-fallback\x00" + kind.String() + ":" + strconv.Itoa(ord)))
 	return hex.EncodeToString(sum[:8])
 }
 

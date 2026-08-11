@@ -411,18 +411,18 @@ func TestBlockIDFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// No Source: every block takes the kind+ordinal fallback,
-	// hex(sha256(kind + ":" + ordinal))[:16] over the document-order
-	// block count.
+	// No Source: every block takes the domain-separated kind+ordinal
+	// fallback, hex(sha256("\x00mdv-fallback\x00" + kind + ":" +
+	// ordinal))[:16] over the document-order block count.
 	tr, err := tree.Build(doc, tree.DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256([]byte("heading:0"))
+	sum := sha256.Sum256([]byte("\x00mdv-fallback\x00heading:0"))
 	if want := hex.EncodeToString(sum[:8]); tr.Blocks[0].(*tree.Heading).ID != want {
 		t.Fatalf("fallback id %q, want %q", tr.Blocks[0].(*tree.Heading).ID, want)
 	}
-	sum = sha256.Sum256([]byte("paragraph:1"))
+	sum = sha256.Sum256([]byte("\x00mdv-fallback\x00paragraph:1"))
 	if want := hex.EncodeToString(sum[:8]); tr.Blocks[1].(*tree.Paragraph).ID != want {
 		t.Fatalf("fallback id %q, want %q", tr.Blocks[1].(*tree.Paragraph).ID, want)
 	}
@@ -443,9 +443,24 @@ func TestBlockIDFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum = sha256.Sum256([]byte("paragraph:0"))
+	sum = sha256.Sum256([]byte("\x00mdv-fallback\x00paragraph:0"))
 	if want := hex.EncodeToString(sum[:8]); tr3.Blocks[0].(*tree.Paragraph).ID != want {
 		t.Fatalf("zero-span id %q, want %q", tr3.Blocks[0].(*tree.Paragraph).ID, want)
+	}
+	// Domain separation: a block whose SOURCE literally spells the
+	// fallback's kind+ordinal must not collide with a fallback id.
+	const trap = "paragraph:0"
+	tr4 := buildDefault(t, trap+"\n") // content-hashed: source present, span valid
+	sum = sha256.Sum256([]byte(trap))
+	if got := tr4.Blocks[0].(*tree.Paragraph).ID; got != hex.EncodeToString(sum[:8]) {
+		t.Fatalf("trap paragraph not content-hashed: %q", got)
+	}
+	tr5, err := tree.Build(hand, tree.DefaultOptions()) // fallback: paragraph ordinal 0
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr4.Blocks[0].(*tree.Paragraph).ID == tr5.Blocks[0].(*tree.Paragraph).ID {
+		t.Fatal("content id collides with fallback id for preimage \"paragraph:0\"")
 	}
 }
 
