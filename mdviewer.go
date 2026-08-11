@@ -144,8 +144,14 @@ func WithResolver(r Resolver) Option {
 // WithThemeOverrides applies CSS custom-property overrides to the rendered theme.
 // Keys must match the pattern --[a-zA-Z0-9_-]+; non-conforming keys are silently
 // dropped. Overrides are emitted after the base theme in sorted key order, ensuring
-// they win in both light and dark variants. Content is emitted into the page's
-// <style> element; </style sequences are stripped defensively.
+// they win in both light and dark variants.
+//
+// Security: override VALUES are host-trusted CSS, emitted into the page's
+// <style> element essentially verbatim — only the </style sequence is
+// stripped (so a value cannot terminate the style element itself). A value
+// CAN still close the :root{} declaration block and inject arbitrary CSS
+// rules, including url() fetches to attacker-controlled origins. Hosts must
+// never echo untrusted data into override values.
 func WithThemeOverrides(vars map[string]string) Option {
 	return func(c *config) { c.render.ThemeOverrides = vars }
 }

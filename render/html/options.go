@@ -33,7 +33,7 @@ type Options struct {
 	Math           bool              // KaTeX math support
 	HeadingAnchors bool              // id attributes on headings
 	Resolver       Resolver          // optional hook to rewrite link/image/wiki-link targets; nil uses default resolution
-	ThemeOverrides map[string]string // CSS custom-property overrides (name → value); keys must match --[a-zA-Z0-9_-]+, non-conforming keys silently dropped; values emitted into the page's <style> element with </style sequences stripped defensively
+	ThemeOverrides map[string]string // CSS custom-property overrides (name → value); keys must match --[a-zA-Z0-9_-]+, non-conforming keys silently dropped. VALUES are host-trusted CSS emitted into the page's <style> element: only </style sequences are stripped, so a value can close the :root{} block and inject arbitrary CSS rules (including url()) — never echo untrusted data into values
 	Stylesheet     string            // non-empty replaces theme.BaseCSS() entirely; emitted into the page's <style> element with </style sequences stripped defensively
 	ExtraCSS       string            // appended after whatever base styling applied (base+theme, or Stylesheet when set); sanitized like Stylesheet
 	SourceMap      bool              // annotate top-level blocks with data-md-line attributes

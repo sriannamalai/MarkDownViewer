@@ -60,6 +60,9 @@ func sanitizeCSS(s string) string {
 
 // emitThemeOverrides emits CSS custom-property overrides in sorted key order.
 // Keys must match the pattern --[a-zA-Z0-9_-]+; non-conforming keys are silently dropped.
+// Values are host-trusted CSS: sanitizeCSS strips only </style sequences, so
+// a value can still close the :root{} block and inject arbitrary CSS rules
+// (including url()). Hosts must not echo untrusted data into values.
 func emitThemeOverrides(overrides map[string]string) string {
 	if len(overrides) == 0 {
 		return ""

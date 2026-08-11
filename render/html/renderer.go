@@ -151,9 +151,13 @@ func (r *writer) block(n document.Node, tight bool) {
 		if variant == "" {
 			variant = "note"
 		}
+		// Title-case first, then escape: the parser constrains variants,
+		// but hand-built documents and doc JSON via RenderDoc can carry
+		// arbitrary bytes here, so both attribute and title positions must
+		// be escaped.
 		title := strings.ToUpper(variant[:1]) + variant[1:]
 		r.raw(`<div` + attr + ` class="admonition admonition-` + esc(variant) + "\">\n")
-		r.raw(`<p class="admonition-title">` + title + "</p>\n")
+		r.raw(`<p class="admonition-title">` + esc(title) + "</p>\n")
 		r.blocks(n, false)
 		r.raw("</div>\n")
 	case *document.List:

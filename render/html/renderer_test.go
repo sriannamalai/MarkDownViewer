@@ -215,6 +215,30 @@ func TestRenderAdmonitionEmptyVariantDoesNotPanic(t *testing.T) {
 	}
 }
 
+func TestRenderAdmonitionHostileVariantEscaped(t *testing.T) {
+	// The parser constrains admonition variants, but hand-built documents
+	// (and doc JSON via RenderDoc) can carry arbitrary variants. Both the
+	// class attribute and the derived title must escape it.
+	doc := &document.Document{}
+	adm := &document.Admonition{Variant: `x"><script>alert(1)</script>`}
+	p := &document.Paragraph{}
+	p.AppendChild(&document.Text{Value: "hello"})
+	adm.AppendChild(p)
+	doc.AppendChild(adm)
+
+	got := renderHandBuiltDoc(t, doc)
+	if strings.Contains(got, "<script") {
+		t.Fatalf("hostile variant produced a live <script tag:\n%s", got)
+	}
+	escaped := "&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"
+	if !strings.Contains(got, `class="admonition admonition-x`+escaped+`"`) {
+		t.Errorf("class attribute not escaped:\n%s", got)
+	}
+	if !strings.Contains(got, `<p class="admonition-title">X`+escaped+"</p>") {
+		t.Errorf("title not escaped (title-casing preserved):\n%s", got)
+	}
+}
+
 func TestRenderListWithNonListItemChildDoesNotPanic(t *testing.T) {
 	doc := &document.Document{}
 	list := &document.List{}

@@ -115,6 +115,25 @@ func TestRenderDocRoundTrip(t *testing.T) {
 	}
 }
 
+// hostileAdmonitionDocJSON is the v0.8.1 XSS reproducer: valid v1 document
+// JSON whose admonition variant carries an attribute-breakout script tag.
+// RenderDoc accepts arbitrary doc JSON, so the renderer must escape the
+// variant in both the class attribute and the derived title.
+const hostileAdmonitionDocJSON = `{"version":1,"kind":"document","children":[{"kind":"admonition","variant":"x\"><script>alert(1)</script>","children":[{"kind":"paragraph","children":[{"kind":"text","value":"hi"}]}]}]}`
+
+func TestRenderDocHostileVariantCannotInjectScript(t *testing.T) {
+	html, err := RenderDoc([]byte(hostileAdmonitionDocJSON), []byte(`{"fragment": true}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(bytes.ToLower(html), []byte("<script")) {
+		t.Fatalf("hostile doc JSON produced a live <script tag:\n%s", html)
+	}
+	if !bytes.Contains(html, []byte("&lt;script&gt;alert(1)&lt;/script&gt;")) {
+		t.Errorf("escaped variant text missing from output:\n%s", html)
+	}
+}
+
 func TestRenderDocImplBadJSON(t *testing.T) {
 	if _, err := RenderDoc([]byte(`{`), nil, nil); err == nil {
 		t.Fatal("want document JSON error, got nil")
