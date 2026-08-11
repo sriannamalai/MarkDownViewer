@@ -98,6 +98,22 @@ func TestThemeCustomization(t *testing.T) {
 	}
 }
 
+func TestWithExtraCSS(t *testing.T) {
+	out, _ := Render(
+		[]byte("# Hi\n"),
+		WithExtraCSS(".host { font-size: 117%; }"),
+	)
+	s := string(out)
+	extra := strings.Index(s, ".host { font-size: 117%; }")
+	if extra == -1 {
+		t.Fatal("WithExtraCSS not applied")
+	}
+	base := strings.Index(s, "body.markdown-body {")
+	if base == -1 || extra < base {
+		t.Fatalf("WithExtraCSS must append after base CSS, not replace it (base=%d extra=%d)", base, extra)
+	}
+}
+
 // TestDefaultLayoutIsFluid is the v0.3 behavior-change guard: the page no
 // longer carries a fixed max-width by default (theme/base.css now reads
 // "max-width: var(--md-max-width, none)"), so a plain Render has no

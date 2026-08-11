@@ -196,6 +196,15 @@ func WithStylesheet(css string) Option {
 	return func(c *config) { c.render.Stylesheet = css }
 }
 
+// WithExtraCSS appends css after the page's base styling — the base+theme
+// stylesheets by default, or the WithStylesheet replacement when one is
+// set. Full-page rendering only, like WithStylesheet; it has no effect in
+// fragment mode. Content is emitted into the page's <style> element;
+// </style sequences are stripped defensively.
+func WithExtraCSS(css string) Option {
+	return func(c *config) { c.render.ExtraCSS = css }
+}
+
 // WithParserConfig selects which Markdown extensions the parser enables
 // when Render/RenderTo (and their Context variants) parse the source.
 // It has no effect on RenderDoc, which receives an already-parsed tree.

@@ -137,6 +137,51 @@ func TestCustomStylesheetReplacesBaseCSS(t *testing.T) {
 	}
 }
 
+func TestExtraCSSAppendsAfterBase(t *testing.T) {
+	got := render(t, "# Hi\n", func(o *Options) {
+		o.Fragment = false
+		o.ThemeName = "light"
+		o.ExtraCSS = "body{font-size:117%}"
+	})
+	base := strings.Index(got, "body.markdown-body {")
+	extra := strings.Index(got, "body{font-size:117%}")
+	if base == -1 || extra == -1 || extra < base {
+		t.Fatalf("extraCss must be appended after base CSS (base=%d extra=%d)", base, extra)
+	}
+}
+
+func TestExtraCSSAppendsAfterCustomStylesheet(t *testing.T) {
+	got := render(t, "# Hi\n", func(o *Options) {
+		o.Fragment = false
+		o.ThemeName = "light"
+		o.Stylesheet = ".custom{}"
+		o.ExtraCSS = ".extra{}"
+	})
+	if strings.Contains(got, "body.markdown-body {") {
+		t.Error("stylesheet must still replace base CSS when extraCss is set")
+	}
+	custom := strings.Index(got, ".custom{}")
+	extra := strings.Index(got, ".extra{}")
+	if custom == -1 || extra == -1 || extra < custom {
+		t.Fatalf("extraCss must come after the custom stylesheet (custom=%d extra=%d)", custom, extra)
+	}
+}
+
+func TestExtraCSSBreakoutPrevention(t *testing.T) {
+	got := render(t, "# Hi\n", func(o *Options) {
+		o.Fragment = false
+		o.ExtraCSS = "x{}</style><script>alert(1)</script>"
+	})
+	// Verify exactly one </style> (the real one)
+	if strings.Count(got, "</style>") != 1 {
+		t.Error("page should contain exactly one </style> closing tag")
+	}
+	// Verify the breakout sequence is removed
+	if strings.Contains(got, "</style><script>alert") {
+		t.Error("style-element breakout sequence should not be present")
+	}
+}
+
 func TestFragmentModeIgnoresCSS(t *testing.T) {
 	got := render(t, "# Hi\n", func(o *Options) {
 		o.Fragment = true

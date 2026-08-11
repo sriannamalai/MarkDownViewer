@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
+	"strings"
 
 	markdownviewer "github.com/sriannamalai/markdownviewer"
 	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
@@ -25,7 +27,23 @@ type options struct {
 	SourceMap      bool              `json:"sourceMap"`
 	ThemeOverrides map[string]string `json:"themeOverrides"`
 	Stylesheet     string            `json:"stylesheet"`
+	ExtraCSS       string            `json:"extraCss"`
 }
+
+// knownOptionKeys holds the exact JSON keys of options, derived from the
+// struct tags so it cannot drift. encoding/json matches field names
+// case-insensitively even with DisallowUnknownFields, so strict decoding
+// additionally requires an exact-case key match against this set (e.g.
+// "extraCSS" must be rejected, not silently folded into "extraCss").
+var knownOptionKeys = func() map[string]bool {
+	keys := map[string]bool{}
+	t := reflect.TypeOf(options{})
+	for i := 0; i < t.NumField(); i++ {
+		name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+		keys[name] = true
+	}
+	return keys
+}()
 
 func defaultOptions() options {
 	return options{Theme: "auto", Mermaid: true, Math: true, Highlighting: true}
@@ -37,6 +55,16 @@ func decodeOptions(data []byte) (options, error) {
 	o := defaultOptions()
 	if len(bytes.TrimSpace(data)) == 0 {
 		return o, nil
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err == nil {
+		// Malformed/trailing input is left for the strict decode below to
+		// report; this pass only enforces exact-case key names.
+		for k := range raw {
+			if !knownOptionKeys[k] {
+				return options{}, fmt.Errorf("options: unknown field %q", k)
+			}
+		}
 	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
@@ -88,6 +116,9 @@ func (o options) toFacadeOptions(resolver htmlrender.Resolver) []markdownviewer.
 	}
 	if o.Stylesheet != "" {
 		opts = append(opts, markdownviewer.WithStylesheet(o.Stylesheet))
+	}
+	if o.ExtraCSS != "" {
+		opts = append(opts, markdownviewer.WithExtraCSS(o.ExtraCSS))
 	}
 	return opts
 }

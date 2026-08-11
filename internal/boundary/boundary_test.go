@@ -39,6 +39,23 @@ func TestRenderImplBadOptions(t *testing.T) {
 	}
 }
 
+func TestRenderImplExtraCSS(t *testing.T) {
+	html, err := Render([]byte(sampleMD), []byte(`{"extraCss": "body{font-size:117%}"}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(html, []byte("body{font-size:117%}")) {
+		t.Error("extraCss not present in rendered output")
+	}
+}
+
+func TestRenderImplExtraCSSWrongCaseRejected(t *testing.T) {
+	if _, err := Render([]byte(sampleMD), []byte(`{"extraCSS": "body{}"}`), nil); err == nil ||
+		!strings.Contains(err.Error(), "extraCSS") {
+		t.Fatalf("want unknown-field error for wrong-case extraCSS, got %v", err)
+	}
+}
+
 func TestParseImpl(t *testing.T) {
 	doc, err := Parse([]byte(sampleMD), nil)
 	if err != nil {

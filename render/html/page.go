@@ -137,6 +137,10 @@ func renderPage(w io.Writer, doc *document.Document, opts Options) error {
 	if mathUsed && opts.Math {
 		ew.write(assets.KatexCSS())
 	}
+	if opts.ExtraCSS != "" {
+		ew.write("\n")
+		ew.write(sanitizeCSS(opts.ExtraCSS))
+	}
 	ew.write("</style>\n</head>\n<body class=\"markdown-body\">\n")
 	if ew.err != nil {
 		return ew.err

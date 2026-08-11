@@ -35,6 +35,7 @@ type Options struct {
 	Resolver       Resolver          // optional hook to rewrite link/image/wiki-link targets; nil uses default resolution
 	ThemeOverrides map[string]string // CSS custom-property overrides (name → value); keys must match --[a-zA-Z0-9_-]+, non-conforming keys silently dropped; values emitted into the page's <style> element with </style sequences stripped defensively
 	Stylesheet     string            // non-empty replaces theme.BaseCSS() entirely; emitted into the page's <style> element with </style sequences stripped defensively
+	ExtraCSS       string            // appended after whatever base styling applied (base+theme, or Stylesheet when set); sanitized like Stylesheet
 	SourceMap      bool              // annotate top-level blocks with data-md-line attributes
 }
 
