@@ -70,7 +70,7 @@ void main() {
     ],
     'footnotes': [
       {
-        'kind': 'footnoteDefinition',
+        'kind': 'footnoteDef',
         'children': [
           {
             'kind': 'paragraph',
@@ -133,10 +133,7 @@ void main() {
     });
 
     test('empty document yields no resolvables', () {
-      expect(
-        collectResolvables({'version': 1, 'kind': 'document'}),
-        isEmpty,
-      );
+      expect(collectResolvables({'version': 1, 'kind': 'document'}), isEmpty);
     });
   });
 
@@ -146,7 +143,12 @@ void main() {
       const b = Resolvable(1, 'x.png');
       expect(a, b);
       expect(a.hashCode, b.hashCode);
-      expect(<Resolvable>{}..add(a)..add(b), hasLength(1));
+      expect(
+        <Resolvable>{}
+          ..add(a)
+          ..add(b),
+        hasLength(1),
+      );
       expect(a, isNot(const Resolvable(0, 'x.png')));
       expect(a, isNot(const Resolvable(1, 'y.png')));
     });
@@ -155,10 +157,7 @@ void main() {
   group('resolverFromMap', () {
     test('answers a mapped target verbatim', () {
       final r = resolverFromMap({'img/photo.png': 'asset://img/photo.png'});
-      expect(
-        r(MdvResolveKind.image, 'img/photo.png'),
-        'asset://img/photo.png',
-      );
+      expect(r(MdvResolveKind.image, 'img/photo.png'), 'asset://img/photo.png');
     });
 
     test('declines an unmapped target with null', () {
@@ -182,8 +181,7 @@ void main() {
         '![alt](img/photo.png)\n\n[click](docs/guide.md)\n\n[[Wiki Page]]\n\n'
         '[again](docs/guide.md)\n';
 
-    test('collectResolvables finds all three kinds and dedupes the repeat',
-        () {
+    test('collectResolvables finds all three kinds and dedupes the repeat', () {
       final parsed = Mdviewer.instance.parse(md);
       final found = collectResolvables(parsed);
       expect(found, hasLength(3));
@@ -192,27 +190,24 @@ void main() {
       expect(found, contains(const Resolvable(2, 'Wiki Page')));
     });
 
-    test(
-      'full async-vault recipe: parse -> collect -> map -> renderDoc',
-      () {
-        final mdv = Mdviewer.instance;
-        final parsed = mdv.parse(md);
-        // Stand-in for the host's async prefetch of each collected target.
-        final resolved = {
-          for (final r in collectResolvables(parsed))
-            if (r.kind == 1) r.target: 'asset://${r.target}',
-        };
-        final page = mdv.renderDoc(
-          parsed,
-          options: MdvOptions(
-            fragment: true,
-            resolver: resolverFromMap(resolved, kindFilter: {1}),
-          ),
-        );
-        expect(page, contains('src="asset://img/photo.png"'));
-        expect(page, contains('href="docs/guide.md"')); // declined: default
-        expect(page, contains('Wiki Page.md')); // declined: .md fallback
-      },
-    );
+    test('full async-vault recipe: parse -> collect -> map -> renderDoc', () {
+      final mdv = Mdviewer.instance;
+      final parsed = mdv.parse(md);
+      // Stand-in for the host's async prefetch of each collected target.
+      final resolved = {
+        for (final r in collectResolvables(parsed))
+          if (r.kind == 1) r.target: 'asset://${r.target}',
+      };
+      final page = mdv.renderDoc(
+        parsed,
+        options: MdvOptions(
+          fragment: true,
+          resolver: resolverFromMap(resolved, kindFilter: {1}),
+        ),
+      );
+      expect(page, contains('src="asset://img/photo.png"'));
+      expect(page, contains('href="docs/guide.md"')); // declined: default
+      expect(page, contains('Wiki Page.md')); // declined: .md fallback
+    });
   });
 }

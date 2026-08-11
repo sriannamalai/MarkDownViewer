@@ -47,6 +47,11 @@ class Resolvable {
 /// Reads the pinned version-1 document codec: nodes are maps with a
 /// `kind` string and nest via `children` lists; `link`/`image` carry
 /// their target in `destination`, `wikiLink` in `target`.
+///
+/// Caveat: `[]()`-style empty destinations can't be represented in the
+/// codec (the field is omitted when empty), so they are never reported
+/// here — though at render time the renderer still consults a live
+/// resolver with an empty target, which should decline.
 List<Resolvable> collectResolvables(Map<String, dynamic> doc) {
   // A set literal is a LinkedHashSet: dedupes while keeping insertion
   // (document) order.
@@ -63,9 +68,7 @@ List<Resolvable> collectResolvables(Map<String, dynamic> doc) {
     if (kind == 'link' || kind == 'image') {
       final destination = node['destination'];
       if (destination is String) {
-        found.add(
-          Resolvable(kind == 'link' ? 0 : 1, destination),
-        );
+        found.add(Resolvable(kind == 'link' ? 0 : 1, destination));
       }
     } else if (kind == 'wikiLink') {
       final target = node['target'];

@@ -44,22 +44,19 @@ void main() {
     });
   });
 
-  test(
-    'host dylib: extraCss is appended to the page and codeHeader emits the '
-    'md-code header markup',
-    () {
-      final page = Mdviewer.instance.render(
-        '# Hi\n\n```shell\nls -la\n```\n',
-        options: const MdvOptions(
-          extraCss: 'body{font-size:117%}',
-          codeHeader: true,
-        ),
-      );
-      expect(page, contains('body{font-size:117%}'));
-      expect(page, contains('class="md-code"'));
-      expect(page, contains('md-code-lang'));
-      expect(page, contains('md-code-copy'));
-      expect(page, contains('shell'));
-    },
-  );
+  test('host dylib: extraCss is appended to the page and codeHeader emits the '
+      'md-code header markup', () {
+    final page = Mdviewer.instance.render(
+      '# Hi\n\n```shell\nls -la\n```\n',
+      options: const MdvOptions(
+        extraCss: 'body{font-size:117%}',
+        codeHeader: true,
+      ),
+    );
+    expect(page, contains('body{font-size:117%}'));
+    expect(page, contains('class="md-code"'));
+    expect(page, contains('md-code-lang'));
+    expect(page, contains('md-code-copy'));
+    expect(page, contains('shell'));
+  });
 }
