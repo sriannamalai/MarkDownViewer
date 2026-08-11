@@ -1,6 +1,6 @@
 name: mdviewer
 description: "Markdown viewer library (Go core over dart:ffi): sanitized HTML rendering with themes, mermaid, KaTeX, and syntax highlighting — fully offline."
-version: 0.8.0
+version: 0.8.1
 publish_to: none
 environment:
   sdk: ^3.9.0
