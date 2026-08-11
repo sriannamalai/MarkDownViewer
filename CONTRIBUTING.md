@@ -88,6 +88,31 @@ change any `mdv_*` signature or the options JSON, update `ffi/README.md`
 (packaged into release artifacts), `examples/c/harness.c`, and
 `examples/dart/` together — they are the boundary's consumers.
 
+## Releasing
+
+Releases are cut by the maintainer (tag/publish steps are gated on
+explicit approval). The flow, in order:
+
+1. Cut the `CHANGELOG.md` entry for the version and land it on `main`.
+2. Push the signed `v<ver>` tag and publish the GitHub release —
+   `.github/workflows/release-ffi.yml` builds and attaches the release
+   artifacts (desktop C-shared zips, WASM npm package, iOS xcframework
+   and Android zips).
+3. Run the post-release E2E checks against the shipped artifacts.
+4. Append the release's mobile-zip SHA-256 checksums to
+   `flutter/mdviewer/tool/checksums.txt` and bump the plugin's
+   `flutter/mdviewer/pubspec.yaml` version, in one commit (until then,
+   `tool/fetch_binaries.sh` refuses to download the new artifacts).
+5. Tag that checksums+pubspec commit `flutter-v<ver>` and push it:
+
+   ```bash
+   git tag flutter-v<ver> && git push origin flutter-v<ver>
+   ```
+
+   This is a standing step: submodule/git consumers of the Flutter
+   plugin pin `flutter-v<ver>` — the first commit able to fetch that
+   release's verified binaries — never a raw SHA.
+
 ## Developer Certificate of Origin (DCO)
 
 All contributions must be signed off, certifying you wrote the change or

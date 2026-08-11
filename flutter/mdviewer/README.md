@@ -15,7 +15,8 @@ themed, in a `WebViewWidget`.
 
 ## Status
 
-Pre-pub.dev. `pubspec.yaml` carries `version: 0.0.0-dev` and
+Pre-pub.dev. `pubspec.yaml` tracks the monorepo release version
+(currently `0.8.0`) and carries
 `publish_to: none` — this plugin is consumed as a path/git dependency
 today; publishing to pub.dev is a separately gated step (see the
 monorepo's `docs/Design.md` roadmap and `CHANGELOG.md`).
@@ -32,7 +33,9 @@ dependencies:
 
 Once published, this becomes an ordinary pub.dev version constraint. Until
 then, pin a git dependency with a `path:` pointing at `flutter/mdviewer` if
-consuming from outside the monorepo.
+consuming from outside the monorepo — pin the release's `flutter-v<ver>`
+tag (e.g. `ref: flutter-v0.8.0`; the commit whose `tool/checksums.txt`
+can fetch that release's binaries), never a raw SHA.
 
 ## Populating the native binaries
 
@@ -51,8 +54,8 @@ them:
 
 - **`tool/fetch_binaries.sh`** — downloads the release-pinned,
   checksum-verified artifacts for the version in `pubspec.yaml` (or
-  `MDVIEWER_VERSION`) from a GitHub release, once v0.7.0's checksums land
-  in `tool/checksums.txt`:
+  `MDVIEWER_VERSION`) from a GitHub release, for any version with
+  checksums in `tool/checksums.txt` (v0.7.0 onward):
 
   ```bash
   cd flutter/mdviewer && tool/fetch_binaries.sh

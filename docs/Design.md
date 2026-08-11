@@ -342,6 +342,17 @@ C-shared FFI already exposes, static on iOS and `c-shared` on Android, over
 `dart:ffi` with `NativeCallable` bridging the `Resolver` callback. See the
 "FFI boundary" subsection above and `flutter/mdviewer/README.md`.
 
+v0.8 closed the host-integration gaps that surfaced while embedding the
+library in real desktop and mobile hosts, ahead of any new rendering
+featureset: two opt-in options riding the existing strict options JSON
+across every surface — `extraCss` (host CSS appended after the page's
+base styling, or after a `stylesheet` replacement) and `codeHeader`
+(a language-label + copy-button header on code blocks, with inline copy
+JS on full pages) — plus Flutter-side pre-resolve helpers
+(`collectResolvables`/`resolverFromMap`) codifying the parse → prefetch →
+sync-resolver pattern for async vaults, and the `flutter-v<ver>` tag
+process for submodule consumers (CONTRIBUTING.md's Releasing section).
+
 Toward v1.0, what remains, roughly in order:
 
 1. **A native render-tree renderer** — for toolkit-native (non-webview)

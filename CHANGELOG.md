@@ -7,6 +7,76 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [0.8.0] - 2026-08-11
+
+Closes the host-integration gaps ledgered while embedding the library in
+real desktop and mobile hosts: two new opt-in rendering options that ride
+the existing strict options JSON across every surface (Go facade, C ABI,
+WASM, Flutter plugin), Dart-side pre-resolve helpers for async vaults, and
+a documented `flutter-v<ver>` tag process for submodule consumers. Both
+new options default off; existing output is unchanged unless opted in
+(one byte-level exception noted under Changed).
+
+### Added
+
+- **`extraCss` option** — `markdownviewer.WithExtraCSS(css)`, boundary
+  options JSON `"extraCss"` (string), WASM `options.extraCss`, Flutter
+  `MdvOptions.extraCss`. Host CSS appended at the end of the full page's
+  `<style>` — after the base+theme stylesheets by default, or after the
+  `stylesheet` replacement when one is set (`stylesheet`'s replace
+  semantics are unchanged). Sanitized through the same CSS sanitizer as
+  `stylesheet`. Full-page scope only, like `stylesheet`; no effect on
+  fragment output. Lets hosts layer text-scale overrides or `@font-face`
+  rules (data: URI fonts) without fetching and re-concatenating
+  `base.css`.
+- **`codeHeader` option** — `markdownviewer.WithCodeHeader()`, boundary
+  options JSON `"codeHeader"` (bool, default false), WASM
+  `options.codeHeader`, Flutter `MdvOptions.codeHeader`. Wraps every code
+  block (both the chroma-highlighted and plain emit paths) in
+  library-authored header markup: `<div class="md-code">` containing a
+  `md-code-header` row with a `md-code-lang` language label (the fence
+  language, or `code` when unlabeled) and a `md-code-copy` button, styled
+  by `theme/base.css` via the existing `--md-*` variables. Live mermaid
+  and math blocks are not wrapped; their plain-code fallbacks (engines
+  disabled) are. `data-md-line` stays on the element it is on today. Full
+  pages additionally embed a small inline clipboard script (copy →
+  transient "Copied"); fragment hosts get the markup and classes and wire
+  their own click handler.
+- **Flutter pre-resolve helpers** (`flutter/mdviewer`):
+  `collectResolvables(doc)` walks a parsed document and returns every
+  distinct resolvable target (link/image/wiki-link, the ABI-frozen 0/1/2
+  kinds), and `resolverFromMap(resolved, {kindFilter})` builds a sync
+  `MdvResolver` that answers mapped targets verbatim and declines the
+  rest. Together they codify the async-vault pattern (parse once →
+  collect targets → prefetch async → render with the map-backed sync
+  resolver) now documented as a recipe in the plugin README.
+- **`flutter-v<ver>` tag process.** After a release's mobile-artifact
+  checksums are appended to `flutter/mdviewer/tool/checksums.txt` and the
+  plugin pubspec is bumped, that commit is tagged `flutter-v<ver>` and
+  pushed (see CONTRIBUTING.md's Releasing section) — submodule consumers
+  pin `flutter-v<ver>`, never a raw SHA. Applied retroactively as
+  `flutter-v0.7.0`.
+
+### Changed
+
+- **Boundary options JSON keys are now matched exact-case.**
+  `encoding/json` matches field names case-insensitively even with
+  `DisallowUnknownFields`, so wrong-case keys (e.g. `"extraCSS"`,
+  `"Theme"`) were silently case-folded into the canonical fields since
+  the boundary's introduction in v0.4. Decoding now rejects them with an
+  unknown-field error, matching the documented contract, which was always
+  "unknown fields are errors". Consumers emitting the documented
+  lowerCamel keys (all known bindings do) are unaffected.
+- **Full-page output always includes the (inert) `.md-code` style block**
+  in `base.css`, even when `codeHeader` is off — page bytes differ from
+  v0.7.0 while the emitted markup is unchanged. Byte-for-byte page
+  comparisons against v0.7.0 output will differ; markup-level comparisons
+  will not.
+- `flutter/mdviewer/ios/mdviewer.podspec` and the plugin README document
+  the known iOS first-build-after-`pod install` ordering quirk around
+  `-force_load` ("Build input file cannot be found"; a retry succeeds).
+  Docs only — no build-system change.
+
 ## [0.7.0] - 2026-08-10
 
 Adds mobile as a third embedding surface alongside the C ABI and WASM: a
