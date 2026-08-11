@@ -527,6 +527,55 @@ void main() {
         );
       },
     );
+
+    testWidgets('block STATE survives a block being inserted above it '
+        '(keys drive reconciliation via findChildIndexCallback)', (
+      tester,
+    ) async {
+      // A stateful block: the unsafe raw-HTML disclosure, whose
+      // open/closed flag lives in its State. ListView.builder
+      // reconciles children BY INDEX unless findChildIndexCallback
+      // maps keys back to their new indices — without it, inserting
+      // a block above tears down and rebuilds everything below
+      // (collapsing the disclosure) despite the stable keys.
+      const raw = '<x-widget data="1">';
+      const html = MdvHtmlBlock(
+        id: 'aaaa11112222bbbb',
+        html: raw,
+        unsafe: true,
+      );
+      await tester.pumpWidget(
+        harness(
+          MdvDocumentView(
+            tree([para('cafe000011110000', 'first'), html]),
+            selectable: false,
+          ),
+        ),
+      );
+      await tester.tap(find.text('Raw HTML (not rendered)'));
+      await tester.pump();
+      expect(find.text(raw), findsOneWidget); // disclosure now open
+
+      // Re-render with a NEW block inserted above; same doc otherwise.
+      await tester.pumpWidget(
+        harness(
+          MdvDocumentView(
+            tree([
+              para('feed000022220000', 'inserted above'),
+              para('cafe000011110000', 'first'),
+              html,
+            ]),
+            selectable: false,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('inserted above', findRichText: true), findsOneWidget);
+      // ELEMENT/STATE SURVIVAL: the disclosure is still open — its
+      // State moved with its (id, occurrence) key to the new index
+      // instead of being rebuilt collapsed.
+      expect(find.text(raw), findsOneWidget);
+    });
   });
 
   group('theming', () {

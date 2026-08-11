@@ -86,20 +86,37 @@ class MdvDocumentView extends StatelessWidget {
       ),
     );
 
-    // (id, occurrenceIndex) keys — see the class doc.
+    // (id, occurrenceIndex) keys — see the class doc — plus the
+    // reverse key->index map findChildIndexCallback needs: the sliver
+    // delegate reconciles children BY INDEX, so without the callback a
+    // block's element (and State) would NOT follow its key when an
+    // insertion or removal shifts indices — everything downstream would
+    // be torn down and rebuilt. With it, keyed elements are relocated
+    // to their new indices and block state (an expanded disclosure, a
+    // code pane's scroll offset) survives edits elsewhere in the
+    // document. This is also what makes the occurrence suffix
+    // load-bearing: the map must be injective, which bare duplicate
+    // ids could not provide.
     final keys = <ValueKey<String>>[];
+    final indexForKey = <Key, int>{};
     final seen = <String, int>{};
-    for (final block in tree.blocks) {
-      final n = seen.update(block.id, (v) => v + 1, ifAbsent: () => 0);
-      keys.add(ValueKey('${block.id}#$n'));
+    for (var i = 0; i < tree.blocks.length; i++) {
+      final n = seen.update(tree.blocks[i].id, (v) => v + 1, ifAbsent: () => 0);
+      final key = ValueKey('${tree.blocks[i].id}#$n');
+      keys.add(key);
+      indexForKey[key] = i;
     }
 
     final hasFootnotes = tree.footnotes.isNotEmpty;
     final itemCount = tree.blocks.length + (hasFootnotes ? 1 : 0);
+    if (hasFootnotes) {
+      indexForKey[const ValueKey('mdv-footnotes')] = tree.blocks.length;
+    }
 
     Widget list = ListView.builder(
       padding: padding,
       itemCount: itemCount,
+      findChildIndexCallback: (key) => indexForKey[key],
       itemBuilder: (context, i) {
         if (i >= tree.blocks.length) {
           return KeyedSubtree(
