@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 goos="$(go env GOOS)"
 goarch="$(go env GOARCH)"
-version="${VERSION:-$(git describe --tags --always)}"
+version="${VERSION:-$(git describe --tags --always --match 'v[0-9]*')}"
 version="${version#v}"
 
 case "$goos" in

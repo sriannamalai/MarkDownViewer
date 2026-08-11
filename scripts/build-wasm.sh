@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-version="${VERSION:-$(git describe --tags --always)}"
+version="${VERSION:-$(git describe --tags --always --match 'v[0-9]*')}"
 version="${version#v}"
 
 out="dist/wasm/npm"
