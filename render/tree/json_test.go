@@ -87,9 +87,9 @@ func TestWireFieldPresence(t *testing.T) {
 		t.Fatalf("wiki source tag: %s", wiki)
 	}
 
-	// footnotes envelope: index + count pairing.
+	// footnotes envelope: index + refCount pairing.
 	fn := marshal(t, "x[^a] y[^a]\n\n[^a]: Body.\n")
-	if !strings.Contains(fn, `"index":1`) || !strings.Contains(fn, `"count":2`) {
+	if !strings.Contains(fn, `"index":1`) || !strings.Contains(fn, `"refCount":2`) {
 		t.Fatalf("footnote pairing: %s", fn)
 	}
 

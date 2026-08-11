@@ -381,14 +381,14 @@ export type Block =
 
 /**
  * One resolved footnote definition; `index` matches the FootnoteRef
- * inlines citing it and `count` is the number of such sites.
+ * inlines citing it and `refCount` is the number of such sites.
  */
 export interface Footnote {
   kind: 'footnoteDef';
   span?: Span;
   id: string;
   index: number;
-  count: number;
+  refCount: number;
   blocks: Block[];
 }
 

@@ -195,10 +195,13 @@ without vendoring anything — `mermaid.js`, `katex.js`, `katex.css`,
 `base.css`, `theme-light.css`, `theme-dark.css` — plus
 `theme-light.json` / `theme-dark.json`, the theme palette as version-1
 JSON data for native/custom renderers, and `highlight-light.json` /
-`highlight-dark.json`, the syntax-highlight token colors
+`highlight-dark.json`, the syntax-highlight token colors and font
+attributes
 (`{"version": 1, "style": "github"|"github-dark", "colors":
-{"<tokenType>": "#rrggbb", ...}}` — keyed by the same chroma token-type
-names the render tree's codeBlock `runs` carry). Full-page output (the
+{"<tokenType>": "#rrggbb", ...}, "styles": {"<tokenType>":
+{"bold"|"italic"|"underline": true, ...}, ...}}` — keyed by the same
+chroma token-type names the render tree's codeBlock `runs` carry;
+`styles` lists only token types the style bolds/italicizes/underlines). Full-page output (the
 default) already embeds everything; you only need `asset()` when
 rendering fragments into your own page. See
 [`ffi/README.md`](https://github.com/sriannamalai/markdownviewer/blob/main/ffi/README.md#assets) for the full registry

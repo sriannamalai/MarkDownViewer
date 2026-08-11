@@ -26,16 +26,19 @@ class MdvPalette {
     required this.codeBackground,
     required this.quoteForeground,
     this.tokenColors = const {},
+    this.tokenStyles = const {},
     this.chromaStyle = '',
   });
 
   /// Parses the two version-1 asset JSON maps: `theme` is a decoded
   /// `theme-light.json` / `theme-dark.json` (`{version, mode,
   /// chromaStyle, vars}`), `highlight` an optionally-supplied decoded
-  /// `highlight-*.json` (`{version, style, colors}`). Throws
+  /// `highlight-*.json` (`{version, style, colors, styles}`). Throws
   /// [FormatException] on an unsupported version, a missing `--md-*`
   /// var, or an unparsable hex color; omitting `highlight` just leaves
-  /// [tokenColors] empty (every token falls back to [foreground]).
+  /// [tokenColors] empty (every token falls back to [foreground]). The
+  /// highlight `styles` map is optional — an older asset without it is
+  /// valid and just leaves [tokenStyles] empty.
   factory MdvPalette.fromJson(
     Map<String, dynamic> theme, {
     Map<String, dynamic>? highlight,
@@ -46,6 +49,7 @@ class MdvPalette {
       throw const FormatException('theme JSON: missing "vars" object');
     }
     final tokenColors = <String, Color>{};
+    final tokenStyles = <String, TextStyle>{};
     var chromaStyle = theme['chromaStyle'] is String
         ? theme['chromaStyle'] as String
         : '';
@@ -57,6 +61,26 @@ class MdvPalette {
       }
       for (final e in colors.entries) {
         tokenColors[e.key] = parseHexColor(e.value as String);
+      }
+      // `styles` is optional (absent in pre-0.10 assets): token types
+      // the chroma style bolds/italicizes/underlines, only-true flags.
+      final styles = highlight['styles'];
+      if (styles != null) {
+        if (styles is! Map<String, dynamic>) {
+          throw const FormatException(
+            'highlight JSON: "styles" is not an object',
+          );
+        }
+        for (final e in styles.entries) {
+          final flags = e.value as Map<String, dynamic>;
+          tokenStyles[e.key] = TextStyle(
+            fontWeight: flags['bold'] == true ? FontWeight.bold : null,
+            fontStyle: flags['italic'] == true ? FontStyle.italic : null,
+            decoration: flags['underline'] == true
+                ? TextDecoration.underline
+                : null,
+          );
+        }
       }
       if (highlight['style'] is String) {
         chromaStyle = highlight['style'] as String;
@@ -71,6 +95,7 @@ class MdvPalette {
       codeBackground: _varColor(vars, '--md-code-bg'),
       quoteForeground: _varColor(vars, '--md-quote-fg'),
       tokenColors: tokenColors,
+      tokenStyles: tokenStyles,
       chromaStyle: chromaStyle,
     );
   }
@@ -150,6 +175,13 @@ class MdvPalette {
   /// direct key here when the style colors it at all.
   final Map<String, Color> tokenColors;
 
+  /// Chroma `TokenType.String()` name → font attributes (bold / italic
+  /// / underline as a color-less [TextStyle]), from the optional
+  /// `styles` map in `highlight-*.json`. Same pre-expanded inheritance
+  /// as [tokenColors]; empty when the asset carries no `styles`
+  /// (pre-0.10 assets) or the style sets no attributes.
+  final Map<String, TextStyle> tokenStyles;
+
   /// The chroma style name these token colors came from (`github`,
   /// `github-dark`, ...).
   final String chromaStyle;
@@ -158,6 +190,15 @@ class MdvPalette {
   /// [foreground] for a token type this palette does not know —
   /// unknown/missing types must never render invisibly.
   Color tokenColor(String tokenType) => tokenColors[tokenType] ?? foreground;
+
+  /// The full [TextStyle] for one code token run: [tokenColor] plus
+  /// the token type's bold/italic/underline attributes from
+  /// [tokenStyles] (none for a type the palette does not style).
+  TextStyle tokenTextStyle(String tokenType) {
+    final base = TextStyle(color: tokenColor(tokenType));
+    final extra = tokenStyles[tokenType];
+    return extra == null ? base : base.merge(extra);
+  }
 
   MdvPalette copyWith({
     Brightness? brightness,
@@ -168,6 +209,7 @@ class MdvPalette {
     Color? codeBackground,
     Color? quoteForeground,
     Map<String, Color>? tokenColors,
+    Map<String, TextStyle>? tokenStyles,
     String? chromaStyle,
   }) {
     return MdvPalette(
@@ -179,6 +221,7 @@ class MdvPalette {
       codeBackground: codeBackground ?? this.codeBackground,
       quoteForeground: quoteForeground ?? this.quoteForeground,
       tokenColors: tokenColors ?? this.tokenColors,
+      tokenStyles: tokenStyles ?? this.tokenStyles,
       chromaStyle: chromaStyle ?? this.chromaStyle,
     );
   }

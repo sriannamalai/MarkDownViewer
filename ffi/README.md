@@ -162,8 +162,8 @@ vendoring anything. Registry (append-only, case-sensitive):
 | `theme-dark.css` | dark theme tokens + dark syntax-highlight CSS |
 | `theme-light.json` | light palette as version-1 JSON data, for native/custom renderers |
 | `theme-dark.json` | dark palette as version-1 JSON data, for native/custom renderers |
-| `highlight-light.json` | light syntax-highlight token colors as version-1 JSON data |
-| `highlight-dark.json` | dark syntax-highlight token colors as version-1 JSON data |
+| `highlight-light.json` | light syntax-highlight token colors + font attributes as version-1 JSON data |
+| `highlight-dark.json` | dark syntax-highlight token colors + font attributes as version-1 JSON data |
 
 The `theme-*.json` schema (version 1):
 `{"version": 1, "mode": "light"|"dark", "chromaStyle": "<chroma style
@@ -173,12 +173,16 @@ the highlight style's *name*, not resolved token colors.
 
 The `highlight-*.json` schema (version 1):
 `{"version": 1, "style": "github"|"github-dark", "colors":
-{"Keyword": "#cf222e", ...}}` — the resolved token colors for that
+{"Keyword": "#cf222e", ...}, "styles": {"Comment": {"italic": true},
+...}}` — the resolved token colors and font attributes for that
 `chromaStyle`, generated from the same chroma style object the CSS
 uses. Keys are chroma's canonical token-type names — exactly the
 `tokenType` values the render tree's codeBlock `runs` carry — and every
-value is a `#rrggbb` foreground color. A token type absent from
-`colors` renders in the host's default text color.
+`colors` value is a `#rrggbb` foreground color. A token type absent from
+`colors` renders in the host's default text color. The optional `styles`
+map carries the style's `bold`/`italic`/`underline` flags: only true
+flags are emitted, only token types with at least one appear, and a
+missing `styles` field (older assets) simply means no font attributes.
 
 Full-page output (the default) already embeds everything; you only need
 `mdv_asset` when rendering fragments into your own page. Apply one

@@ -434,7 +434,7 @@ void main() {
                 MdvFootnoteDef(
                   id: 'fn',
                   index: 1,
-                  count: 1,
+                  refCount: 1,
                   blocks: [para('fp', 'the note')],
                 ),
               ],

@@ -533,7 +533,7 @@ void main() {
   });
 
   group('footnotes', () {
-    test('footnoteDef in the envelope with index/count', () {
+    test('footnoteDef in the envelope with index/refCount', () {
       final tree = MdvTree.fromMap(
         _env(
           [
@@ -550,7 +550,7 @@ void main() {
               'kind': 'footnoteDef',
               'id': 'f',
               'index': 1,
-              'count': 2,
+              'refCount': 2,
               'blocks': [
                 {'kind': 'paragraph', 'id': 'p2', 'children': []},
               ],
@@ -560,7 +560,7 @@ void main() {
       );
       final f = tree.footnotes.single as MdvFootnoteDef;
       expect(f.index, 1);
-      expect(f.count, 2);
+      expect(f.refCount, 2);
       final p = tree.blocks.single as MdvParagraph;
       expect((p.children.single as MdvFootnoteRef).index, 1);
     });
@@ -569,7 +569,7 @@ void main() {
       expect(
         () => MdvTree.fromMap(
           _env([], [
-            {'kind': 'footnoteDef', 'id': 'f', 'count': 1, 'blocks': []},
+            {'kind': 'footnoteDef', 'id': 'f', 'refCount': 1, 'blocks': []},
           ]),
         ),
         _formatExceptionNaming('footnotes[0].index'),

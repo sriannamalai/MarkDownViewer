@@ -225,6 +225,12 @@ final palette = await MdvPalette.load(dark: true);
 // host-overridable: palette.copyWith(background: myBg).
 ```
 
+The loaded palette also carries the highlight asset's font attributes
+(`tokenStyles`: bold/italic/underline per token type — e.g. github-dark
+italicizes comments), applied to code token runs alongside
+`tokenColors`. Assets without a `styles` map (pre-0.10) load fine and
+just style nothing.
+
 ### Overriding block rendering
 
 Every block kind is overridable via `MdvBuilders`; the built-in child

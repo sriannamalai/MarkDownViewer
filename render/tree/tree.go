@@ -269,7 +269,7 @@ type DefinitionDesc struct {
 // [FootnoteRef] inlines that cite it, and RefCount is the number of
 // such sites (for hosts rendering per-reference backlinks). Pairing and
 // order come from the shared derivation (derive.Footnotes).
-// Wire: {"kind":"footnoteDef",span,id,"index","count","blocks"}.
+// Wire: {"kind":"footnoteDef",span,id,"index","refCount","blocks"}.
 type Footnote struct {
 	Span     document.Span
 	ID       string

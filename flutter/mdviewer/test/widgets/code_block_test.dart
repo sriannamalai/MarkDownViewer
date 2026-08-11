@@ -76,6 +76,63 @@ void main() {
     );
   });
 
+  testWidgets('styled token types render the asset font attributes', (
+    tester,
+  ) async {
+    // Palette built from asset-shaped JSON whose optional `styles` map
+    // bolds keywords and italicizes comments (the github-dark pattern).
+    final styled = MdvPalette.fromJson(
+      {
+        'version': 1,
+        'mode': 'light',
+        'chromaStyle': 'github',
+        'vars': {
+          '--md-accent': '#0969da',
+          '--md-bg': '#ffffff',
+          '--md-border': '#d1d9e0',
+          '--md-code-bg': '#f6f8fa',
+          '--md-fg': '#1f2328',
+          '--md-quote-fg': '#59636e',
+        },
+      },
+      highlight: {
+        'version': 1,
+        'style': 'github',
+        'colors': {'Keyword': '#cf222e', 'Comment': '#59636e'},
+        'styles': {
+          'Keyword': {'bold': true},
+          'Comment': {'italic': true},
+        },
+      },
+    );
+    const styledBlock = MdvCodeBlock(
+      id: 'c',
+      language: 'go',
+      label: 'go',
+      text: 'func // hi\n',
+      runs: [
+        MdvTokenRun(text: 'func', tokenType: 'Keyword'),
+        MdvTokenRun(text: ' ', tokenType: 'Text'),
+        MdvTokenRun(text: '// hi', tokenType: 'Comment'),
+      ],
+    );
+    await tester.pumpWidget(
+      harness(MdvDocumentView(tree([styledBlock]), palette: styled)),
+    );
+    final spans = leafSpans(tester);
+    final kw = spans.firstWhere((s) => s.text == 'func');
+    expect(kw.style?.color, const Color(0xFFCF222E));
+    expect(kw.style?.fontWeight, FontWeight.bold);
+    expect(kw.style?.fontStyle, isNull);
+    final comment = spans.firstWhere((s) => s.text == '// hi');
+    expect(comment.style?.fontStyle, FontStyle.italic);
+    expect(comment.style?.fontWeight, isNull);
+    // Unstyled token: no attributes leak in.
+    final plain = spans.firstWhere((s) => s.text == ' ');
+    expect(plain.style?.fontWeight, isNull);
+    expect(plain.style?.fontStyle, isNull);
+  });
+
   testWidgets('null runs render plain monospace text', (tester) async {
     const plainBlock = MdvCodeBlock(
       id: 'c',

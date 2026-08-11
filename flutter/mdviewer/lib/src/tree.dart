@@ -318,14 +318,14 @@ class MdvDefinitionDesc extends MdvBlock {
 
 /// One resolved footnote definition in the envelope's `footnotes` array
 /// (wire kind `footnoteDef`): [index] matches the [MdvFootnoteRef]
-/// inlines that cite it, and [count] is the number of such sites (for
-/// hosts rendering per-reference backlinks).
+/// inlines that cite it, and [refCount] is the number of such sites
+/// (for hosts rendering per-reference backlinks).
 class MdvFootnoteDef extends MdvBlock {
   const MdvFootnoteDef({
     required super.id,
     super.span,
     required this.index,
-    required this.count,
+    required this.refCount,
     required this.blocks,
   });
 
@@ -333,7 +333,7 @@ class MdvFootnoteDef extends MdvBlock {
   final int index;
 
   /// Number of reference sites citing this definition.
-  final int count;
+  final int refCount;
 
   final List<MdvBlock> blocks;
 }
@@ -815,7 +815,7 @@ MdvBlock _parseBlock(Object? v, String path) {
         id: _field<String>(node, 'id', path),
         span: _optSpan(node, path),
         index: _field<int>(node, 'index', path),
-        count: _field<int>(node, 'count', path),
+        refCount: _field<int>(node, 'refCount', path),
         blocks: _blocks(node, 'blocks', path),
       );
     default:

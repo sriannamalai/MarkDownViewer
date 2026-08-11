@@ -24,10 +24,10 @@ func (t *Tree) MarshalJSON() ([]byte, error) {
 			return nil, err
 		}
 		footnotes = append(footnotes, &wFootnote{
-			wHead:  head(document.KindFootnoteDef, fn.Span, fn.ID),
-			Index:  fn.Index,
-			Count:  fn.RefCount,
-			Blocks: bs,
+			wHead:    head(document.KindFootnoteDef, fn.Span, fn.ID),
+			Index:    fn.Index,
+			RefCount: fn.RefCount,
+			Blocks:   bs,
 		})
 	}
 	return json.Marshal(&struct {
@@ -156,9 +156,9 @@ type (
 	}
 	wFootnote struct {
 		wHead
-		Index  int   `json:"index"`
-		Count  int   `json:"count"`
-		Blocks []any `json:"blocks"`
+		Index    int   `json:"index"`
+		RefCount int   `json:"refCount"`
+		Blocks   []any `json:"blocks"`
 	}
 
 	wText struct {

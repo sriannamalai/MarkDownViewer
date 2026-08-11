@@ -322,7 +322,7 @@ class MdvCodeBlockView extends StatelessWidget {
               for (final run in _trimmedRuns(runs))
                 TextSpan(
                   text: run.text,
-                  style: TextStyle(color: palette.tokenColor(run.tokenType)),
+                  style: palette.tokenTextStyle(run.tokenType),
                 ),
             ],
           );

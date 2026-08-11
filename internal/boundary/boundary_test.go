@@ -323,8 +323,8 @@ func TestAssetImpl(t *testing.T) {
 		"theme-dark.css":   {"--md-bg", ".chroma"},
 		"theme-light.json":     {"--md-bg", `"version"`},
 		"theme-dark.json":      {"--md-bg", `"version"`},
-		"highlight-light.json": {`"colors"`, `"Keyword"`, `"version"`},
-		"highlight-dark.json":  {`"colors"`, `"Keyword"`, `"version"`},
+		"highlight-light.json": {`"colors"`, `"Keyword"`, `"version"`, `"styles"`},
+		"highlight-dark.json":  {`"colors"`, `"Keyword"`, `"version"`, `"styles"`},
 	}
 	for name, wants := range markers {
 		got, err := Asset(name)
@@ -419,6 +419,11 @@ func TestAssetImplHighlightJSON(t *testing.T) {
 			Version int               `json:"version"`
 			Style   string            `json:"style"`
 			Colors  map[string]string `json:"colors"`
+			Styles  map[string]struct {
+				Bold      bool `json:"bold"`
+				Italic    bool `json:"italic"`
+				Underline bool `json:"underline"`
+			} `json:"styles"`
 		}
 		if err := json.Unmarshal(got, &decoded); err != nil {
 			t.Fatalf("Asset(%q): not valid JSON: %v", tc.name, err)
@@ -474,6 +479,59 @@ func TestAssetImplHighlightJSON(t *testing.T) {
 		}
 		if len(decoded.Colors) != wantKeys {
 			t.Errorf("Asset(%q): %d colors, want %d (stray keys?)", tc.name, len(decoded.Colors), wantKeys)
+		}
+		// styles: exactly the token types the style bolds/italicizes/
+		// underlines (trilean Yes only), same Style.Get inheritance walk
+		// as colors. Empirically github has 2 (NameLabel bold,
+		// GenericUnderline underline) and github-dark 21 (italic
+		// comments, bold names/operators).
+		wantStyled := 0
+		for tt := range chroma.StandardTypes {
+			entry := style.Get(tt)
+			if tt != chroma.Background {
+				entry = entry.Sub(bg)
+			}
+			wantBold := entry.Bold == chroma.Yes
+			wantItalic := entry.Italic == chroma.Yes
+			wantUnderline := entry.Underline == chroma.Yes
+			got, present := decoded.Styles[tt.String()]
+			if want := wantBold || wantItalic || wantUnderline; present != want {
+				t.Errorf("Asset(%q): styles[%q] present=%v, want %v", tc.name, tt.String(), present, want)
+				continue
+			}
+			if present {
+				wantStyled++
+				if got.Bold != wantBold || got.Italic != wantItalic || got.Underline != wantUnderline {
+					t.Errorf("Asset(%q): styles[%q] = %+v, want bold=%v italic=%v underline=%v",
+						tc.name, tt.String(), got, wantBold, wantItalic, wantUnderline)
+				}
+			}
+		}
+		if len(decoded.Styles) != wantStyled {
+			t.Errorf("Asset(%q): %d styles, want %d (stray keys?)", tc.name, len(decoded.Styles), wantStyled)
+		}
+		wantCount := map[string]int{"github": 2, "github-dark": 21}[tc.want.ChromaStyle]
+		if len(decoded.Styles) != wantCount {
+			t.Errorf("Asset(%q): %d styled types, want %d", tc.name, len(decoded.Styles), wantCount)
+		}
+		switch tc.want.ChromaStyle {
+		case "github":
+			if got := decoded.Styles["NameLabel"]; !got.Bold || got.Italic || got.Underline {
+				t.Errorf("Asset(%q): styles[NameLabel] = %+v, want bold only", tc.name, got)
+			}
+			if got := decoded.Styles["GenericUnderline"]; !got.Underline || got.Bold || got.Italic {
+				t.Errorf("Asset(%q): styles[GenericUnderline] = %+v, want underline only", tc.name, got)
+			}
+		case "github-dark":
+			if got := decoded.Styles["Comment"]; !got.Italic || got.Bold || got.Underline {
+				t.Errorf("Asset(%q): styles[Comment] = %+v, want italic only", tc.name, got)
+			}
+			if got := decoded.Styles["NameFunction"]; !got.Bold || got.Italic || got.Underline {
+				t.Errorf("Asset(%q): styles[NameFunction] = %+v, want bold only", tc.name, got)
+			}
+			if got := decoded.Styles["CommentPreproc"]; !got.Bold || !got.Italic || got.Underline {
+				t.Errorf("Asset(%q): styles[CommentPreproc] = %+v, want bold+italic", tc.name, got)
+			}
 		}
 		// Deterministic: a second fetch is byte-identical.
 		again, err := Asset(tc.name)

@@ -184,7 +184,7 @@ void main() {
 
     final fd = tree.footnotes.single as MdvFootnoteDef;
     expect(fd.index, 1);
-    expect(fd.count, 1);
+    expect(fd.refCount, 1);
 
     final inlines = _allInlines(tree.blocks);
     expect(inlines.whereType<MdvUnknownInline>(), isEmpty);

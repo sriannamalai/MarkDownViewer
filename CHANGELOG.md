@@ -52,11 +52,14 @@ additive; existing HTML output is byte-identical to v0.9.0.
   beside the HTML highlight cache — with the invariant that the runs'
   concatenated text equals the code exactly; `runs` is `null` when
   highlighting is off or the language is unknown (the `text` field is
-  always present). Two new assets map the token types to colors:
-  `highlight-light.json` / `highlight-dark.json`
+  always present). Two new assets map the token types to colors and
+  font attributes: `highlight-light.json` / `highlight-dark.json`
   (`{"version":1, "style":"github"|"github-dark", "colors":
-  {"Keyword":"#cf222e", ...}}`), generated from the same chroma style
-  objects the CSS uses — single source of truth, like `theme-*.json`.
+  {"Keyword":"#cf222e", ...}, "styles": {"Comment":{"italic":true},
+  ...}}` — the optional `styles` map lists only token types the style
+  bolds/italicizes/underlines, only-true flags), generated from the
+  same chroma style objects the CSS uses — single source of truth, like
+  `theme-*.json`.
   Asset registry grows 8 → 10, reachable from every surface via
   `mdv_asset`/`asset()`.
 - **Four new C symbols** (thirteen total; append-only ABI growth,

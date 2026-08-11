@@ -194,14 +194,30 @@ func themeJSONAsset(t theme.Theme) ([]byte, error) {
 // TokenType.String() names — the same names used as keys here). Only
 // token types the style resolves a foreground color for are present;
 // hosts fall back to their default text color for any missing type.
+// Styles is the non-color half of the same resolution: token types the
+// style bolds/italicizes/underlines, with only the true attributes
+// emitted and only token types carrying at least one. The field is
+// optional for consumers — an older asset without it means "no
+// attributes" (colors alone), never an error.
 type highlightJSON struct {
-	Version int               `json:"version"`
-	Style   string            `json:"style"`  // chroma style name, e.g. "github"
-	Colors  map[string]string `json:"colors"` // TokenType.String() → "#rrggbb"
+	Version int                           `json:"version"`
+	Style   string                        `json:"style"`  // chroma style name, e.g. "github"
+	Colors  map[string]string             `json:"colors"` // TokenType.String() → "#rrggbb"
+	Styles  map[string]highlightStyleJSON `json:"styles"` // TokenType.String() → attribute flags
+}
+
+// highlightStyleJSON is one styles entry: the chroma style's font
+// attributes for a token type. Each flag is emitted only when true
+// (chroma trilean Yes); No and Pass are both absence.
+type highlightStyleJSON struct {
+	Bold      bool `json:"bold,omitempty"`
+	Italic    bool `json:"italic,omitempty"`
+	Underline bool `json:"underline,omitempty"`
 }
 
 // highlightJSONAsset resolves the theme's paired chroma style into
-// token colors — the SAME styles.Get(t.ChromaStyle) object the CSS path
+// token colors and font attributes — the SAME styles.Get(t.ChromaStyle)
+// object the CSS path
 // (htmlrender.HighlightCSS via the chroma HTML formatter) formats
 // against, walked the same way that formatter's WriteCSS is: every
 // standard token type (chroma.StandardTypes, not just the style's
@@ -218,6 +234,7 @@ func highlightJSONAsset(t theme.Theme) ([]byte, error) {
 	style := styles.Get(t.ChromaStyle)
 	bg := style.Get(chroma.Background)
 	colors := map[string]string{}
+	attrs := map[string]highlightStyleJSON{}
 	for tt := range chroma.StandardTypes {
 		entry := style.Get(tt)
 		if tt != chroma.Background {
@@ -226,6 +243,14 @@ func highlightJSONAsset(t theme.Theme) ([]byte, error) {
 		if entry.Colour.IsSet() {
 			colors[tt.String()] = entry.Colour.String()
 		}
+		a := highlightStyleJSON{
+			Bold:      entry.Bold == chroma.Yes,
+			Italic:    entry.Italic == chroma.Yes,
+			Underline: entry.Underline == chroma.Yes,
+		}
+		if a.Bold || a.Italic || a.Underline {
+			attrs[tt.String()] = a
+		}
 	}
-	return json.Marshal(highlightJSON{Version: 1, Style: t.ChromaStyle, Colors: colors})
+	return json.Marshal(highlightJSON{Version: 1, Style: t.ChromaStyle, Colors: colors, Styles: attrs})
 }
