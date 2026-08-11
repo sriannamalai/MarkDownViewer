@@ -1,4 +1,4 @@
-package htmlrender
+package resolve
 
 import "strings"
 
@@ -9,7 +9,7 @@ var allowedSchemes = map[string]bool{
 	"http": true, "https": true, "mailto": true, "tel": true,
 }
 
-// safeURL reports whether a URL is allowed under the default policy.
+// SafeURL reports whether a URL is allowed under the default policy.
 //
 // Control characters (runes <= 0x20) are stripped before scheme inspection.
 // This closes a bypass where e.g. "jav\tascript:" evades a naive prefix
@@ -20,7 +20,7 @@ var allowedSchemes = map[string]bool{
 // After stripping, if a scheme is present (a ':' before any '/', '?', or
 // '#'), it must be on the allowlist. URLs with no scheme — relative paths,
 // #fragments, protocol-relative // URLs — are allowed.
-func safeURL(u string) bool {
+func SafeURL(u string) bool {
 	s := stripControl(u)
 	scheme, ok := urlScheme(s)
 	if !ok {

@@ -9,6 +9,7 @@ import (
 	"github.com/yuin/goldmark/util"
 
 	"github.com/sriannamalai/markdownviewer/document"
+	"github.com/sriannamalai/markdownviewer/resolve"
 )
 
 // Render writes doc to w as HTML per opts, either a full page (the default)
@@ -88,22 +89,20 @@ func esc(s string) string {
 //
 // A Resolver's ok=true result is trusted per its documented contract
 // (Options.Resolver): the host controls resolution, so its URL is emitted
-// as-is, bypassing the safeURL scheme allowlist. Everything else — no
-// Resolver installed, or the Resolver declined with ok=false — takes the
-// default resolution path (wikilink targets get ".md" appended; other
-// destinations pass through unchanged) and is filtered by safeURL exactly
-// as before.
+// as-is, bypassing the resolve.SafeURL scheme allowlist. Everything else —
+// no Resolver installed, or the Resolver declined with ok=false — takes
+// the default resolution path (resolve.DefaultResolution: wikilink targets
+// get ".md" appended; other destinations pass through unchanged) and is
+// filtered by resolve.SafeURL exactly as before. Both policies live in the
+// renderer-agnostic resolve package so every renderer shares them.
 func (r *writer) href(kind ResolveKind, dest string) (string, bool) {
 	if r.opts.Resolver != nil {
 		if u, ok := r.opts.Resolver(kind, dest); ok {
 			return esc(u), true
 		}
 	}
-	u := dest
-	if kind == ResolveWikiLink {
-		u = dest + ".md"
-	}
-	if !r.opts.Unsafe && !safeURL(u) {
+	u := resolve.DefaultResolution(kind, dest)
+	if !r.opts.Unsafe && !resolve.SafeURL(u) {
 		return "", false
 	}
 	if kind != ResolveWikiLink {

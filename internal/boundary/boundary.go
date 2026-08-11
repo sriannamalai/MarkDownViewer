@@ -18,7 +18,7 @@ import (
 
 // Render renders markdown to HTML per the strict version-1 options JSON;
 // resolver may be nil for default resolution.
-func Render(md, optsJSON []byte, resolver htmlrender.Resolver) ([]byte, error) {
+func Render(md, optsJSON []byte, resolver markdownviewer.Resolver) ([]byte, error) {
 	o, err := decodeOptions(optsJSON)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func Parse(md, optsJSON []byte) ([]byte, error) {
 
 // RenderDoc renders a version-1 document JSON to HTML per the strict
 // version-1 options JSON; resolver may be nil for default resolution.
-func RenderDoc(docJSON, optsJSON []byte, resolver htmlrender.Resolver) ([]byte, error) {
+func RenderDoc(docJSON, optsJSON []byte, resolver markdownviewer.Resolver) ([]byte, error) {
 	o, err := decodeOptions(optsJSON)
 	if err != nil {
 		return nil, err

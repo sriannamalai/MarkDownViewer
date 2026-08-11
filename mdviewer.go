@@ -60,29 +60,32 @@ import (
 	"github.com/sriannamalai/markdownviewer/document"
 	"github.com/sriannamalai/markdownviewer/parser"
 	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
+	"github.com/sriannamalai/markdownviewer/resolve"
 )
 
 // ResolveKind identifies which kind of target a Resolver is being asked to
-// resolve: a standard link, an image, or a wiki-link.
-type ResolveKind = htmlrender.ResolveKind
+// resolve: a standard link, an image, or a wiki-link. It is an alias for
+// [resolve.ResolveKind], the renderer-agnostic home of the resolution
+// policy shared by all renderers.
+type ResolveKind = resolve.ResolveKind
 
 // Resolver is a function that rewrites link and image targets. It accepts the
 // resolution kind (link, image, or wiki-link) and target URL, returning the
 // rewritten URL and true if resolution succeeded, or false to fall back to
-// default handling.
+// default handling. It is an alias for [resolve.Resolver].
 //
 // Trust contract: URLs returned with ok=true are emitted as-is without scheme
 // filtering. Hosts fully control resolution and must not echo untrusted
 // targets back unexamined.
-type Resolver = htmlrender.Resolver
+type Resolver = resolve.Resolver
 
 const (
 	// ResolveLink signals resolution of a standard Markdown link target.
-	ResolveLink = htmlrender.ResolveLink
+	ResolveLink = resolve.ResolveLink
 	// ResolveImage signals resolution of a Markdown image target.
-	ResolveImage = htmlrender.ResolveImage
+	ResolveImage = resolve.ResolveImage
 	// ResolveWikiLink signals resolution of a wiki-link target.
-	ResolveWikiLink = htmlrender.ResolveWikiLink
+	ResolveWikiLink = resolve.ResolveWikiLink
 )
 
 type config struct {

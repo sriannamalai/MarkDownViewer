@@ -5,36 +5,9 @@ import (
 	"testing"
 )
 
-func TestSafeURLSchemeAllowlist(t *testing.T) {
-	cases := []struct {
-		name string
-		u    string
-		want bool
-	}{
-		{"http", "http://example.com", true},
-		{"https", "https://example.com", true},
-		{"mailto", "mailto:a@b.com", true},
-		{"tel", "tel:+15551234567", true},
-		{"relative", "picture.png", true},
-		{"relative-path", "docs/page.md", true},
-		{"fragment", "#section", true},
-		{"protocol-relative", "//example.com/x", true},
-		{"javascript", "javascript:alert(1)", false},
-		{"javascript-mixed-case", "JaVaScRiPt:alert(1)", false},
-		{"javascript-tab-bypass", "jav\tascript:alert(1)", false},
-		{"javascript-newline-bypass", "java\nscript:alert(1)", false},
-		{"data", "data:text/html;base64,xx", false},
-		{"vbscript", "vbscript:msgbox(1)", false},
-		{"unknown-scheme", "steam://run", false},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := safeURL(c.u); got != c.want {
-				t.Errorf("safeURL(%q) = %v, want %v", c.u, got, c.want)
-			}
-		})
-	}
-}
+// The SafeURL scheme-allowlist unit table lives with the policy in
+// resolve/url_test.go; the tests here pin that the HTML renderer actually
+// enforces that policy on rendered output.
 
 func TestTabBypassLinkRendersWithoutHref(t *testing.T) {
 	got := render(t, "[x](jav\tascript:alert(1))\n", nil)
@@ -76,14 +49,15 @@ func TestRelativeFragmentAndHTTPSKeepWorking(t *testing.T) {
 // TestEntityEncodedSchemeBypassRendersWithoutHref pins the ordering between
 // character-reference decoding (parser/transform.go's unescapeText, applied
 // to link destinations before they ever reach the renderer) and the
-// safeURL scheme check in href() (render/html/renderer.go): decoding must
-// happen BEFORE the safeURL check runs, or an attacker can hide a blocked
-// scheme like "javascript:" behind an HTML entity or character reference
-// and have it slip through as an "unknown"/unparseable scheme.
+// resolve.SafeURL scheme check in href() (render/html/renderer.go):
+// decoding must happen BEFORE the SafeURL check runs, or an attacker can
+// hide a blocked scheme like "javascript:" behind an HTML entity or
+// character reference and have it slip through as an "unknown"/unparseable
+// scheme.
 //
 // Nothing else in the suite exercises this ordering: both TestCommonMarkSpec
-// and TestGFMExtras render with Options.Unsafe=true, where safeURL is
-// never even consulted, so safeURL had zero conformance coverage prior to
+// and TestGFMExtras render with Options.Unsafe=true, where SafeURL is
+// never even consulted, so SafeURL had zero conformance coverage prior to
 // this test. All three cases are expected to be blocked (no href
 // attribute) under the default (Unsafe=false) policy, exactly like the
 // unencoded "javascript:alert(1)" case in TestUnsafeURLsStripped.

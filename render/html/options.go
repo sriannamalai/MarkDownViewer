@@ -1,26 +1,27 @@
 // Package htmlrender renders the document model to themed HTML.
 package htmlrender
 
-// ResolveKind identifies which kind of destination is being resolved by a
-// Resolver call.
-type ResolveKind int
+import "github.com/sriannamalai/markdownviewer/resolve"
 
-// These values are ABI-frozen: the FFI and WASM boundaries expose them
-// as bare ints (0=link, 1=image, 2=wiki-link). Append-only — never
-// reorder or renumber (see internal/boundary/kinds_test.go).
+// ResolveKind identifies which kind of destination is being resolved by a
+// Resolver call. It is an alias for [resolve.ResolveKind]; the resolve
+// package is the renderer-agnostic home of the resolution policy.
+type ResolveKind = resolve.ResolveKind
+
+// The kind values are ABI-frozen (0=link, 1=image, 2=wiki-link);
+// see resolve.ResolveKind and internal/boundary/kinds_test.go.
 const (
-	ResolveLink     ResolveKind = iota // a Link's Destination
-	ResolveImage                       // an Image's Destination
-	ResolveWikiLink                    // a WikiLink's Target
+	ResolveLink     = resolve.ResolveLink     // a Link's Destination
+	ResolveImage    = resolve.ResolveImage    // an Image's Destination
+	ResolveWikiLink = resolve.ResolveWikiLink // a WikiLink's Target
 )
 
-// Resolver lets hosts rewrite link/image/wiki-link targets. Returning
-// ok=false falls back to default handling.
-//
-// Trust contract: URLs returned with ok=true are emitted as-is, without
-// scheme filtering — hosts fully control resolution, so they must not
-// echo untrusted targets back unexamined.
-type Resolver func(kind ResolveKind, target string) (url string, ok bool)
+// Resolver lets hosts rewrite link/image/wiki-link targets. It is an
+// alias for [resolve.Resolver], which documents the trust contract:
+// URLs returned with ok=true are emitted as-is, without scheme
+// filtering; ok=false falls back to default handling
+// (resolve.DefaultResolution filtered by resolve.SafeURL).
+type Resolver = resolve.Resolver
 
 // Options configures Render's output: page assembly, safety policy, and
 // which optional feature renderings are enabled.

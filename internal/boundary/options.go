@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	markdownviewer "github.com/sriannamalai/markdownviewer"
-	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
 )
 
 // options is the version-1 options JSON accepted by every exported
@@ -81,7 +80,7 @@ func decodeOptions(data []byte) (options, error) {
 	return o, nil
 }
 
-func (o options) toFacadeOptions(resolver htmlrender.Resolver) []markdownviewer.Option {
+func (o options) toFacadeOptions(resolver markdownviewer.Resolver) []markdownviewer.Option {
 	var opts []markdownviewer.Option
 	if resolver != nil {
 		opts = append(opts, markdownviewer.WithResolver(resolver))

@@ -35,8 +35,8 @@ import (
 	"math"
 	"unsafe"
 
+	markdownviewer "github.com/sriannamalai/markdownviewer"
 	"github.com/sriannamalai/markdownviewer/internal/boundary"
-	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
 )
 
 // version is injected at build time via -ldflags "-X main.version=…".
@@ -268,15 +268,15 @@ func mdv_version() *C.char {
 	return cVersion
 }
 
-// cResolver wraps a host C callback as an htmlrender.Resolver. A nil fn
-// yields a nil Resolver (default resolution). Contract violations panic;
-// the panic is converted to an FFI error by the call envelope in mdv.go,
-// so the host sees a failed render, never a crash.
-func cResolver(fn C.mdv_resolver_fn, userdata unsafe.Pointer) htmlrender.Resolver {
+// cResolver wraps a host C callback as a markdownviewer.Resolver. A nil
+// fn yields a nil Resolver (default resolution). Contract violations
+// panic; the panic is converted to an FFI error by the call envelope in
+// mdv.go, so the host sees a failed render, never a crash.
+func cResolver(fn C.mdv_resolver_fn, userdata unsafe.Pointer) markdownviewer.Resolver {
 	if fn == nil {
 		return nil
 	}
-	return func(kind htmlrender.ResolveKind, target string) (string, bool) {
+	return func(kind markdownviewer.ResolveKind, target string) (string, bool) {
 		ctarget := C.CString(target)
 		defer C.free(unsafe.Pointer(ctarget))
 		var outURL *C.char

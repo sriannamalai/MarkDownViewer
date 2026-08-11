@@ -12,8 +12,8 @@ import (
 	"fmt"
 	"syscall/js"
 
+	markdownviewer "github.com/sriannamalai/markdownviewer"
 	"github.com/sriannamalai/markdownviewer/internal/boundary"
-	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
 )
 
 // version is injected at build time via -ldflags "-X main.version=…".
@@ -47,11 +47,11 @@ func result(f func() (any, error)) (out map[string]any) {
 // Contract: return a string (resolved, trusted verbatim) or null/
 // undefined (declined). Throwing, or returning any other type, fails the
 // render.
-func jsResolver(fn js.Value) htmlrender.Resolver {
+func jsResolver(fn js.Value) markdownviewer.Resolver {
 	if fn.IsUndefined() || fn.IsNull() {
 		return nil
 	}
-	return func(kind htmlrender.ResolveKind, target string) (string, bool) {
+	return func(kind markdownviewer.ResolveKind, target string) (string, bool) {
 		res := fn.Invoke(int(kind), target) // JS throw -> panic(js.Error) -> result() recovers
 		if res.IsNull() || res.IsUndefined() {
 			return "", false
