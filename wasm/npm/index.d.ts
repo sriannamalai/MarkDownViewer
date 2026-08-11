@@ -355,7 +355,14 @@ export interface DefinitionDesc {
   blocks: Block[];
 }
 
-/** Block node union, discriminated by `kind`. */
+/**
+ * Block node union, discriminated by `kind`.
+ *
+ * Forward compatibility: the wire schema stays version 1 across additive
+ * growth, so a newer library may emit kinds this union does not name.
+ * Exhaustive switches must carry a default arm (render nothing or a
+ * placeholder) — treat the union as open, not closed.
+ */
 export type Block =
   | Heading
   | Paragraph

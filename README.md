@@ -411,6 +411,9 @@ t, err := tree.Build(doc, tree.Options{
 	Mermaid:        true,
 	Source:         src, // enables content-hash block ids
 })
+if err != nil {
+	log.Fatal(err)
+}
 wire, _ := json.Marshal(t) // the version-1 wire JSON
 ```
 

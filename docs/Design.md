@@ -438,8 +438,9 @@ the "FFI boundary" subsection above.
 v0.7 shipped mobile — a Flutter FFI plugin (`flutter/mdviewer`) and the
 release artifacts it consumes (`libmdviewer-<version>-ios.xcframework.zip`,
 `libmdviewer-<version>-android.zip`, built by `scripts/build-mobile.sh`).
-No new boundary was needed: the plugin binds the same nine-symbol ABI the
-C-shared FFI already exposes, static on iOS and `c-shared` on Android, over
+No new boundary was needed: the plugin binds the same ABI the
+C-shared FFI already exposes (nine symbols at the time; thirteen since
+v0.10), static on iOS and `c-shared` on Android, over
 `dart:ffi` with `NativeCallable` bridging the `Resolver` callback. See the
 "FFI boundary" subsection above and `flutter/mdviewer/README.md`.
 

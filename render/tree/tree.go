@@ -7,6 +7,16 @@
 // renderer uses (render/internal/derive and the resolve package), so
 // the two renderers cannot drift.
 //
+// # Evolution within version 1
+//
+// The version stays 1 across additive growth: new OPTIONAL fields may
+// appear on existing nodes, and new block/inline KINDS may appear as the
+// document model grows. Consumers must therefore default-case on unknown
+// kinds (render nothing, or a host-chosen placeholder) rather than treat
+// the kind set as closed — the Flutter model's Unknown nodes and any
+// TypeScript switch's default arm are the intended paths. A version bump
+// is reserved for changes that break existing fields.
+//
 // # Wire schema (version 1, strict)
 //
 // [Tree.MarshalJSON] produces the envelope
