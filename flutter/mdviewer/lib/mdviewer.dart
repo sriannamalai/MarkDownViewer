@@ -8,4 +8,5 @@ export 'src/mdviewer_base.dart';
 export 'src/options.dart';
 export 'src/preresolve.dart';
 export 'src/exceptions.dart';
+export 'src/tree.dart';
 export 'src/version_check.dart';

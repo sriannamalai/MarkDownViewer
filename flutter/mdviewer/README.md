@@ -88,8 +88,10 @@ final html = Mdviewer.instance.render(
 );
 ```
 
-Four calls, mirroring the C ABI's `mdv_render` / `mdv_render_r` /
-`mdv_parse` / `mdv_render_doc` / `mdv_render_doc_r` / `mdv_asset` family:
+The calls mirror the C ABI's `mdv_render` / `mdv_render_r` / `mdv_parse` /
+`mdv_render_doc` / `mdv_render_doc_r` / `mdv_render_tree` /
+`mdv_render_tree_r` / `mdv_render_tree_doc` / `mdv_render_tree_doc_r` /
+`mdv_asset` family:
 
 - **`Mdviewer.instance.render(markdown, {options})`** — Markdown to
   sanitized HTML. Uses `mdv_render_r` under the hood when `options.resolver`
@@ -104,6 +106,21 @@ Four calls, mirroring the C ABI's `mdv_render` / `mdv_render_r` /
   JSON `String` form) without re-parsing the source — the parse-once/
   render-many path, e.g. for a theme toggle. Uses `mdv_render_doc_r` /
   `mdv_render_doc` the same way `render` picks between the two.
+- **`Mdviewer.instance.renderTree(markdown, {options})`** — Markdown to
+  the version-1 **native render tree**: the layout-free, fully resolved
+  semantic tree native hosts render as platform widgets (no webview),
+  returned as the typed `MdvTree` model. Uses `mdv_render_tree_r` when
+  `options.resolver` is set, `mdv_render_tree` otherwise — resolver
+  semantics identical to `render` (trees carry resolved URLs; a
+  policy-blocked destination is `url: ''` + `blocked: true`).
+  **`renderTreeRaw`** returns the same tree as the raw decoded
+  `Map<String, dynamic>` for hosts walking the wire JSON themselves.
+- **`Mdviewer.instance.renderTreeDoc(doc, {options})`** — the render
+  tree from a previously `parse`d document (decoded `Map` or JSON
+  `String`), without re-parsing the markdown; **`renderTreeDocRaw`** is
+  its raw-map twin. Block ids differ from `renderTree`'s: with no
+  markdown source at hand for content hashes, every block takes the
+  deterministic positional fallback id form.
 - **`Mdviewer.instance.asset(name)`** — an embedded static asset
   (`mermaid.js`, `katex.js`, `katex.css`, `base.css`, `theme-light.css`,
   `theme-dark.css`, plus `theme-light.json` / `theme-dark.json` — the
@@ -114,8 +131,39 @@ Four calls, mirroring the C ABI's `mdv_render` / `mdv_render_r` /
 - **`Mdviewer.instance.version`** — the linked library's version string
   (`mdv_version`).
 
-All four throw `MdviewerException` on a boundary error, carrying the exact
-boundary message.
+All of these throw `MdviewerException` on a boundary error, carrying the
+exact boundary message.
+
+### The typed render-tree model
+
+`MdvTree.fromMap` parses the raw wire map into a sealed `MdvBlock`
+hierarchy (`MdvHeading`, `MdvParagraph`, `MdvBlockQuote`, `MdvAdmonition`,
+`MdvList` + `MdvListItem`, `MdvCodeBlock` + `MdvTokenRun`, `MdvMathBlock`,
+`MdvDiagram`, `MdvTable`, `MdvThematicBreak`, `MdvHtmlBlock`,
+`MdvDefinitionList` / `MdvDefinitionTerm` / `MdvDefinitionDesc`,
+`MdvFootnoteDef`) and a sealed `MdvInline` hierarchy (`MdvText`,
+`MdvEmphasis`, `MdvStrong`, `MdvStrikethrough`, `MdvCodeSpan`, `MdvLink`,
+`MdvImage`, `MdvMathInline`, `MdvHardBreak`, `MdvSoftBreak`,
+`MdvHtmlInline`, `MdvFootnoteRef`), each carrying its span where the wire
+has one. Parsing is strict where the version-1 schema promises — a
+missing required field or wrong type throws a `FormatException` naming
+the offending path (e.g. `blocks[2].items[0].task`) — with exactly one
+tolerance for forward compatibility: an unknown block/inline `kind`
+decodes as `MdvUnknownBlock` / `MdvUnknownInline` carrying the raw map,
+never a throw.
+
+**The id caveat:** block ids are content hashes, so two byte-identical
+source blocks share the same id BY DESIGN (that sharing is what makes
+ids diff-stable). Hosts needing unique keys — `ListView.builder`, React-
+style reconciliation — must key by `(id, occurrenceIndex)`, never by id
+alone.
+
+**Options relevance:** for the tree calls only `parser` (renderTree
+only), `headingAnchors`, `highlighting`, `math`, `mermaid`, and
+`allowRawHTML` apply; the HTML-only fields (`theme`, `themeOverrides`,
+`fragment`, `maxWidth`, `sourceMap`, `stylesheet`, `extraCss`,
+`codeHeader`) are decoded and ignored, and spans are always included —
+see `ffi/README.md`'s options-relevance table.
 
 ## Options
 

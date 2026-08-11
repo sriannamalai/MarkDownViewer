@@ -54,16 +54,26 @@ typedef RenderRDart =
       ffi.Pointer<ffi.Pointer<ffi.Char>>,
     );
 
-/// Resolved function pointers for the nine `libmdviewer` C symbols
+/// Resolved function pointers for the thirteen `libmdviewer` C symbols
 /// (see `ffi/README.md` for the ABI contract).
 class MdvBindings {
   MdvBindings(ffi.DynamicLibrary lib)
     : render = lib.lookupFunction<_RenderC, RenderDart>('mdv_render'),
       parse = lib.lookupFunction<_RenderC, RenderDart>('mdv_parse'),
       renderDoc = lib.lookupFunction<_RenderC, RenderDart>('mdv_render_doc'),
+      renderTree = lib.lookupFunction<_RenderC, RenderDart>('mdv_render_tree'),
+      renderTreeDoc = lib.lookupFunction<_RenderC, RenderDart>(
+        'mdv_render_tree_doc',
+      ),
       renderR = lib.lookupFunction<_RenderRC, RenderRDart>('mdv_render_r'),
       renderDocR = lib.lookupFunction<_RenderRC, RenderRDart>(
         'mdv_render_doc_r',
+      ),
+      renderTreeR = lib.lookupFunction<_RenderRC, RenderRDart>(
+        'mdv_render_tree_r',
+      ),
+      renderTreeDocR = lib.lookupFunction<_RenderRC, RenderRDart>(
+        'mdv_render_tree_doc_r',
       ),
       asset = lib
           .lookupFunction<
@@ -99,8 +109,12 @@ class MdvBindings {
   final RenderDart render;
   final RenderDart parse;
   final RenderDart renderDoc;
+  final RenderDart renderTree;
+  final RenderDart renderTreeDoc;
   final RenderRDart renderR;
   final RenderRDart renderDocR;
+  final RenderRDart renderTreeR;
+  final RenderRDart renderTreeDocR;
   final int Function(
     ffi.Pointer<ffi.Char>,
     ffi.Pointer<ffi.Pointer<ffi.Char>>,
