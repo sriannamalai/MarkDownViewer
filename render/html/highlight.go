@@ -1,6 +1,7 @@
 package htmlrender
 
 import (
+	"crypto/sha256"
 	"io"
 	"regexp"
 	"sort"
@@ -14,22 +15,78 @@ import (
 
 var chromaFormatter = chromahtml.New(chromahtml.WithClasses(true))
 
-// highlight writes chroma-highlighted HTML for code; returns false when the
-// language is unknown so the caller can fall back to plain rendering.
-func highlight(w io.Writer, code, lang string) bool {
+// highlightStyleName is the single chroma style code-block HTML is formatted
+// against. It is fixed per build: the formatter runs in classes mode, so the
+// emitted markup carries class names only, and dark-mode rendering is pure
+// CSS layering on top of the same markup (see page.go and
+// neutralizeMissingClasses). This constant is why the highlight cache key
+// omits style identity.
+const highlightStyleName = "github"
+
+// tokenise produces chroma's token stream for (code, lang) — the expensive
+// step (lexer selection + regexp2 tokenisation dominates render CPU and
+// allocations). Returns nil when lang is empty/unknown or the lexer errors,
+// mirroring highlight's fallback-to-plain semantics.
+//
+// This tokenise/format split is the native-render seam: a future native
+// renderer consumes this token stream directly as (text, style) runs,
+// without the HTML formatter below.
+func tokenise(code, lang string) chroma.Iterator {
 	if lang == "" {
-		return false
+		return nil
 	}
 	lexer := lexers.Get(lang)
 	if lexer == nil {
-		return false
+		return nil
 	}
 	lexer = chroma.Coalesce(lexer)
 	it, err := lexer.Tokenise(nil, code)
 	if err != nil {
+		return nil
+	}
+	return it
+}
+
+// formatTokens renders a chroma token stream as classes-mode HTML against
+// the package-fixed style. This is the cheap half of the split.
+func formatTokens(it chroma.Iterator) (string, bool) {
+	var b strings.Builder
+	if chromaFormatter.Format(&b, styles.Get(highlightStyleName), it) != nil {
+		return "", false
+	}
+	return b.String(), true
+}
+
+// highlightHTML returns the highlighted HTML for (code, lang), consulting
+// the bounded package-level cache first. Returns ok=false when the language
+// is unknown or chroma fails, so the caller can fall back to plain
+// rendering; failures are never cached.
+func highlightHTML(code, lang string) (string, bool) {
+	key := highlightKey{lang: lang, sum: sha256.Sum256([]byte(code))}
+	if html, ok := hlCache.get(key); ok {
+		return html, true
+	}
+	it := tokenise(code, lang)
+	if it == nil {
+		return "", false
+	}
+	html, ok := formatTokens(it)
+	if !ok {
+		return "", false
+	}
+	hlCache.put(key, html)
+	return html, true
+}
+
+// highlight writes chroma-highlighted HTML for code; returns false when the
+// language is unknown so the caller can fall back to plain rendering.
+func highlight(w io.Writer, code, lang string) bool {
+	html, ok := highlightHTML(code, lang)
+	if !ok {
 		return false
 	}
-	return chromaFormatter.Format(w, styles.Get("github"), it) == nil
+	_, err := io.WriteString(w, html)
+	return err == nil
 }
 
 // chromaCSS returns class-based CSS for a chroma style ("github",
