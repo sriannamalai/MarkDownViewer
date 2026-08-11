@@ -70,11 +70,24 @@ func (c *Container) SetSpan(s Span) { c.span = s }
 
 // Span locates a node in the original Markdown source. Lines are 1-based;
 // offsets are 0-based byte offsets forming the half-open range
-// [StartOffset, EndOffset). The zero Span means "position unknown". In
-// v0.2 only block-level nodes are populated; inline spans are reserved
-// for future use. Offsets are relative to the source AFTER any leading
-// UTF-8 BOM has been stripped and any invalid UTF-8 byte sequences have
-// been replaced with the Unicode replacement character.
+// [StartOffset, EndOffset). The zero Span means "position unknown".
+// Offsets are relative to the source AFTER any leading UTF-8 BOM has been
+// stripped and any invalid UTF-8 byte sequences have been replaced with
+// the Unicode replacement character.
+//
+// Block-level nodes (populated since v0.2) carry marker-inclusive spans
+// for leaf blocks and child-union spans for container blocks; since v0.9
+// ThematicBreak has a real line span too. Inline nodes are populated
+// since v0.9 with one caveat: for delimited inline containers — Emphasis,
+// Strong, Strikethrough, CodeSpan, Link, Image, WikiLink — the span
+// covers the CONTENT only (the visible inner text), because goldmark
+// keeps no source segments for the delimiters (*, **, ~~, backticks,
+// [](), [[]]) and inventing their positions would be guesswork. Text and
+// HTMLInline spans are exact; MathInline spans include the $/$$
+// delimiters (recorded by this module's own math parser). Nodes with no
+// recoverable source position keep the zero Span: autolinks (goldmark
+// hides the segment), synthesized text (emoji shortcode expansions,
+// link-reference labels), SoftBreak/HardBreak, and FootnoteRef.
 type Span struct {
 	StartLine, EndLine     int
 	StartOffset, EndOffset int

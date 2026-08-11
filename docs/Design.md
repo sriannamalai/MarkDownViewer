@@ -81,15 +81,44 @@ renumbered, new node types only ever append. `Kind.String()` and
 **Source spans.** `document.Span` (`StartLine`/`EndLine`, 1-based, plus
 `StartOffset`/`EndOffset`, 0-based half-open byte offsets) locates a node in
 the source it was parsed from; the zero `Span` means "position unknown".
-Coverage in v0.2 is block-level only — inline nodes carry no span. Leaf
-blocks (headings, paragraphs, code blocks, thematic breaks, …) get an exact
-span from goldmark's own line info, inclusive of block markers (`#`,
-` ``` `, blockquote `>`); container blocks (block quotes, lists, list
-items, tables, definition lists) get the union of their direct children's
-non-zero spans instead of their own markers. One node currently has no span
-at all: `ThematicBreak` is a single-token leaf with no `Lines()` data from
-goldmark to derive one from, so its `Span()` is always the zero value —
-hosts that need `<hr>` positions must fall back to surrounding-node spans.
+Leaf blocks (headings, paragraphs, code blocks, …) get an exact span from
+goldmark's own line info, inclusive of block markers (`#`, ` ``` `,
+blockquote `>`); container blocks (block quotes, lists, list items,
+tables, definition lists) get the union of their direct children's
+non-zero spans instead of their own markers. `ThematicBreak` — which had
+no span in v0.2 because goldmark's stock parser leaves its `Lines()`
+empty — gets a real, marker-inclusive line span since v0.9 via a
+span-recording replacement block parser (`parser/tbreak.go`) registered
+between goldmark's setext-heading and stock thematic-break parsers with
+an identical match predicate, so parse precedence is unchanged (pinned by
+the CommonMark suite). With `SourceMap` on, `<hr>` therefore now carries
+`data-md-line` like every other top-level block.
+
+Inline nodes carry spans since v0.9, with an honesty caveat on delimited
+containers. goldmark's inline AST keeps source segments only for content
+(text runs, raw-HTML segments) and drops the delimiter tokens, so:
+
+- **Exact spans:** `Text` (its merged segment), `HTMLInline` (raw
+  segments cover the markup itself), `MathInline` (our own inline math
+  parser records the full `$…$`/`$$…$$` range, delimiters included).
+- **Content-only spans:** `Emphasis`, `Strong`, `Strikethrough`,
+  `CodeSpan`, `Link`, `Image`, `WikiLink` span the union of their
+  content — the visible inner text — NOT the `*`/`**`/`~~`/backtick/
+  `[](dest)`/`[[]]` delimiters, whose positions are not recoverable from
+  goldmark and are deliberately not guessed. A `Link`'s span covers its
+  label text only, an `Image`'s its alt text, a `WikiLink`'s the label
+  half after any `|`.
+- **No span (zero value):** autolinks (`<https://…>` and linkified bare
+  URLs — goldmark's `AutoLink` node hides its segment in an unexported
+  field), synthesized `Text` (emoji shortcode expansions, autolink
+  labels), `SoftBreak`/`HardBreak`, and `FootnoteRef`.
+
+Front matter needs no special offset handling: the fence lines stay in
+the source buffer (the front-matter parser consumes them but offsets are
+absolute), so block and inline spans below the fence point at the true
+source lines. Inline spans do not render — `data-md-line` stays a
+block-level annotation — and the JSON codec simply carries the extra
+`span` fields (`omitempty`, wire-compatible).
 Offsets are relative to the source *after* parsing's up-front
 normalization: a leading UTF-8 BOM is stripped and any invalid UTF-8 byte
 sequences are replaced with U+FFFD before goldmark ever sees the bytes, so

@@ -25,6 +25,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	gparser "github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 	"go.abhg.dev/goldmark/frontmatter"
 	"go.abhg.dev/goldmark/wikilink"
 
@@ -177,7 +178,13 @@ func frontMatterDelimLine(line []byte) (delim byte, count int) {
 
 // build assembles the goldmark instance for cfg.
 func build(cfg Config) goldmark.Markdown {
-	var opts []goldmark.Option
+	// The span-recording thematic-break parser is registered for every
+	// config (it is not an extension — it shadows a stock CommonMark
+	// parser with an equivalent one that records the line segment; see
+	// tbreak.go for the priority/precedence analysis).
+	opts := []goldmark.Option{goldmark.WithParserOptions(
+		gparser.WithBlockParsers(util.Prioritized(thematicBreakParser{}, 150)),
+	)}
 	if exts := extensions(cfg); len(exts) > 0 {
 		opts = append(opts, goldmark.WithExtensions(exts...))
 	}

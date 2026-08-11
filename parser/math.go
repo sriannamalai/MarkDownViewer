@@ -14,6 +14,9 @@ type mathNode struct {
 	ast.BaseInline
 	Display bool
 	Source  []byte
+	// Segment is the full delimiter-inclusive source range ("$x$" /
+	// "$$x$$"), recorded at parse time for the node's Span.
+	Segment text.Segment
 }
 
 func (n *mathNode) Kind() ast.NodeKind { return mathKind }
@@ -37,7 +40,7 @@ func (mathParser) Trigger() []byte { return []byte{'$'} }
 // promoted from paragraphs in the transformer. Rules: no space just inside
 // either delimiter; content non-empty.
 func (mathParser) Parse(parent ast.Node, block text.Reader, pc gparser.Context) ast.Node {
-	line, _ := block.PeekLine()
+	line, seg := block.PeekLine()
 	delim := 1
 	if len(line) >= 2 && line[1] == '$' {
 		delim = 2
@@ -65,6 +68,10 @@ func (mathParser) Parse(parent ast.Node, block text.Reader, pc gparser.Context) 
 	}
 	src := make([]byte, end)
 	copy(src, rest[:end])
-	block.Advance(delim + end + delim)
-	return &mathNode{Display: delim == 2, Source: src}
+	total := delim + end + delim
+	block.Advance(total)
+	return &mathNode{
+		Display: delim == 2, Source: src,
+		Segment: text.NewSegment(seg.Start, seg.Start+total),
+	}
 }

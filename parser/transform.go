@@ -160,6 +160,42 @@ func (t *transformer) leafSpan(n ast.Node) document.Span {
 	}
 }
 
+// segSpan converts a raw source byte range [start, stop) into a Span.
+// Unlike leafSpan it does NOT extend left to the start of the line: inline
+// content starts mid-line. An empty or inverted range yields the zero Span.
+func (t *transformer) segSpan(start, stop int) document.Span {
+	if stop <= start {
+		return document.Span{}
+	}
+	return document.Span{
+		StartLine: t.lines.lineFor(start), EndLine: t.lines.lineFor(stop - 1),
+		StartOffset: start, EndOffset: stop,
+	}
+}
+
+// astTextUnionSpan returns the span covering n's direct *ast.Text children's
+// segments — the content range of inline containers whose document
+// counterpart keeps no children of its own (code spans).
+func (t *transformer) astTextUnionSpan(n ast.Node) document.Span {
+	start, stop := -1, -1
+	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+		txt, ok := c.(*ast.Text)
+		if !ok || txt.Segment.Len() == 0 {
+			continue
+		}
+		if start < 0 || txt.Segment.Start < start {
+			start = txt.Segment.Start
+		}
+		if txt.Segment.Stop > stop {
+			stop = txt.Segment.Stop
+		}
+	}
+	if start < 0 {
+		return document.Span{}
+	}
+	return t.segSpan(start, stop)
+}
+
 // setSpan records s on n if n supports it. All document node types embed
 // Container and thus satisfy this, but n is typed as the document.Node
 // interface at call sites, which does not itself expose SetSpan.
@@ -169,27 +205,29 @@ func setSpan(n document.Node, s document.Span) {
 	}
 }
 
+// unionSpan widens a to also cover b; a zero operand yields the other.
+func unionSpan(a, b document.Span) document.Span {
+	switch {
+	case a.IsZero():
+		return b
+	case b.IsZero():
+		return a
+	}
+	if b.StartOffset < a.StartOffset {
+		a.StartOffset, a.StartLine = b.StartOffset, b.StartLine
+	}
+	if b.EndOffset > a.EndOffset {
+		a.EndOffset, a.EndLine = b.EndOffset, b.EndLine
+	}
+	return a
+}
+
 // childUnionSpan returns the union of the direct children's non-zero spans.
 func childUnionSpan(n document.Node) document.Span {
 	var u document.Span
 	for _, c := range n.Children() {
-		sp, ok := c.(interface{ Span() document.Span })
-		if !ok {
-			continue
-		}
-		s := sp.Span()
-		if s.IsZero() {
-			continue
-		}
-		if u.IsZero() {
-			u = s
-			continue
-		}
-		if s.StartOffset < u.StartOffset {
-			u.StartOffset, u.StartLine = s.StartOffset, s.StartLine
-		}
-		if s.EndOffset > u.EndOffset {
-			u.EndOffset, u.EndLine = s.EndOffset, s.EndLine
+		if sp, ok := c.(interface{ Span() document.Span }); ok {
+			u = unionSpan(u, sp.Span())
 		}
 	}
 	return u
@@ -224,6 +262,7 @@ func (t *transformer) appendChildren(parent document.Node, n ast.Node) {
 					if kids := parent.Children(); len(kids) > 0 {
 						if last, ok := kids[len(kids)-1].(*document.Text); ok {
 							last.Value += txt.Value
+							last.SetSpan(unionSpan(last.Span(), txt.Span()))
 							out = nil
 						}
 					}
@@ -314,7 +353,11 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		cb.SetSpan(t.leafSpan(n))
 		return cb
 	case *ast.ThematicBreak:
-		return &document.ThematicBreak{}
+		// goldmark's stock parser leaves Lines() empty; ours (tbreak.go)
+		// records the break's line segment there, so leafSpan works.
+		tb := &document.ThematicBreak{}
+		tb.SetSpan(t.leafSpan(n))
+		return tb
 	case *ast.HTMLBlock:
 		html := blockLines(n, t.src)
 		span := t.leafSpan(n)
@@ -327,8 +370,12 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		hb.SetSpan(span)
 		return hb
 	case *ast.Text:
-		return &document.Text{Value: unescapeText(n.Segment.Value(t.src))}
+		txt := &document.Text{Value: unescapeText(n.Segment.Value(t.src))}
+		txt.SetSpan(t.segSpan(n.Segment.Start, n.Segment.Stop))
+		return txt
 	case *ast.String:
+		// Synthesized content (e.g. link-reference labels) with no source
+		// segment: span stays zero.
 		return &document.Text{Value: string(n.Value)}
 	case *ast.Emphasis:
 		var out document.Node
@@ -338,9 +385,16 @@ func (t *transformer) convert(n ast.Node) document.Node {
 			out = &document.Emphasis{}
 		}
 		t.appendChildren(out, n)
+		// Content-only span: goldmark drops the */_ delimiter runs from the
+		// segment list, so the union of the children is all that exists.
+		setSpan(out, childUnionSpan(out))
 		return out
 	case *ast.CodeSpan:
-		return &document.CodeSpan{Value: spanText(n, t.src)}
+		cs := &document.CodeSpan{Value: spanText(n, t.src)}
+		// Content-only span (backticks excluded): the document node keeps
+		// no children, so union the ast children's segments directly.
+		cs.SetSpan(t.astTextUnionSpan(n))
+		return cs
 	case *ast.Link:
 		// Destination/Title are decoded here (backslash escapes, entity and
 		// numeric character references); see unescapeText. Percent-encoding
@@ -349,6 +403,10 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		// of the document model want the human-readable destination.
 		l := &document.Link{Destination: unescapeText(n.Destination), Title: unescapeText(n.Title)}
 		t.appendChildren(l, n)
+		// Content-only span: covers the link text, not the []()/ reference
+		// delimiters or the destination (goldmark keeps no segments for
+		// them).
+		l.SetSpan(childUnionSpan(l))
 		return l
 	case *ast.AutoLink:
 		// Deliberately not passed through unescapeText: CommonMark does not
@@ -359,6 +417,9 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		if n.AutoLinkType == ast.AutoLinkEmail && !strings.HasPrefix(url, "mailto:") {
 			url = "mailto:" + url
 		}
+		// No span: goldmark's AutoLink keeps its source segment in an
+		// unexported field with no accessor, so no honest position exists
+		// for either the link or its synthesized label Text.
 		l := &document.Link{Destination: url}
 		l.AppendChild(&document.Text{Value: string(n.Label(t.src))})
 		return l
@@ -366,6 +427,8 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		img := &document.Image{Destination: unescapeText(n.Destination), Title: unescapeText(n.Title)}
 		t.appendChildren(img, n)
 		img.Alt = document.PlainText(img)
+		// Content-only span: covers the alt text, like Link above.
+		img.SetSpan(childUnionSpan(img))
 		return img
 	case *ast.RawHTML:
 		var b strings.Builder
@@ -373,7 +436,14 @@ func (t *transformer) convert(n ast.Node) document.Node {
 			seg := n.Segments.At(i)
 			b.Write(seg.Value(t.src))
 		}
-		return &document.HTMLInline{HTML: b.String()}
+		hi := &document.HTMLInline{HTML: b.String()}
+		// Raw HTML's segments cover the markup itself, so the span is the
+		// full source range — no delimiter caveat here.
+		if n.Segments.Len() > 0 {
+			first, last := n.Segments.At(0), n.Segments.At(n.Segments.Len()-1)
+			hi.SetSpan(t.segSpan(first.Start, last.Stop))
+		}
+		return hi
 	case *east.Table:
 		tbl := &document.Table{}
 		for _, a := range n.Alignments {
@@ -398,17 +468,19 @@ func (t *transformer) convert(n ast.Node) document.Node {
 	case *east.TableCell:
 		cell := &document.TableCell{}
 		t.appendChildren(cell, n)
-		// TableCell's children are inline nodes (zero span by convention),
-		// so a child union would always be zero here. Unlike Table and
-		// TableRow/TableHeader, the goldmark TableCell ast node carries its
-		// own Lines() segment (see extension/table.go parseRow, which calls
-		// node.Lines().Append(seg)), so leafSpan gives the real per-cell
-		// span; Table/TableRow then pick it up via childUnionSpan below.
+		// Unlike Table and TableRow/TableHeader, the goldmark TableCell ast
+		// node carries its own Lines() segment (see extension/table.go
+		// parseRow, which calls node.Lines().Append(seg)), so leafSpan
+		// gives the full per-cell span — wider than a union of the inline
+		// children (it includes surrounding padding and any unspanned
+		// inlines); Table/TableRow then pick it up via childUnionSpan.
 		cell.SetSpan(t.leafSpan(n))
 		return cell
 	case *east.Strikethrough:
 		s := &document.Strikethrough{}
 		t.appendChildren(s, n)
+		// Content-only span: the ~~ delimiters leave no segments.
+		s.SetSpan(childUnionSpan(s))
 		return s
 	case *east.TaskCheckBox:
 		if t.item != nil {
@@ -444,8 +516,8 @@ func (t *transformer) convert(n ast.Node) document.Node {
 		t.appendChildren(dt, n)
 		// Like TableCell, DefinitionTerm's own ast node carries its Lines()
 		// segment directly (extension/definition_list.go: term.Lines().
-		// Append(segment)), while its children are inline (zero span), so
-		// leafSpan is the real source here.
+		// Append(segment)), which covers the whole term line rather than
+		// just the inline children's union, so leafSpan is the real source.
 		dt.SetSpan(t.leafSpan(n))
 		return dt
 	case *east.DefinitionDescription:
@@ -456,9 +528,16 @@ func (t *transformer) convert(n ast.Node) document.Node {
 	case *wikilink.Node:
 		wl := &document.WikiLink{Target: string(n.Target)}
 		t.appendChildren(wl, n)
+		// Content-only span: covers the visible label segment (after any
+		// "|"), not the [[ ]] delimiters or the target half.
+		wl.SetSpan(childUnionSpan(wl))
 		return wl
 	case *mathNode:
-		return &document.MathInline{Source: string(n.Source), Display: n.Display}
+		mi := &document.MathInline{Source: string(n.Source), Display: n.Display}
+		// Full delimiter-inclusive span ($x$ / $$x$$): our own inline
+		// parser records the segment at parse time (math.go).
+		mi.SetSpan(t.segSpan(n.Segment.Start, n.Segment.Stop))
+		return mi
 	default:
 		return nil // unknown/unwired node kinds are dropped
 	}
@@ -504,6 +583,10 @@ func promoteAdmonition(bq *document.BlockQuote) *document.Admonition {
 		for _, c := range rest {
 			np.AppendChild(c)
 		}
+		// The synthesized paragraph has no goldmark lines of its own; the
+		// inline children carry spans now, so union them (this excludes
+		// the stripped [!VARIANT] marker, which is the point).
+		np.SetSpan(childUnionSpan(np))
 		adm.AppendChild(np)
 	}
 	for _, c := range kids[1:] {
