@@ -36,6 +36,12 @@ Pod::Spec.new do |s|
   # `user_target_xcconfig`, not `pod_target_xcconfig`: the latter only
   # affects this pod's own (unused, sourceless) build product, not the
   # consuming app target that actually needs the symbols linked in.
+  # Known quirk: the FIRST build after `pod install` can fail with "Build
+  # input file cannot be found" pointing at the -force_load path above —
+  # Xcode build ordering sometimes links the app target before CocoaPods'
+  # xcframework copy script has produced libmdviewer.a under
+  # PODS_XCFRAMEWORKS_BUILD_DIR. Just build again: the retry succeeds,
+  # and it does not recur until the next pod install.
   s.user_target_xcconfig = {
     'OTHER_LDFLAGS' =>
       '$(inherited) -force_load $(PODS_XCFRAMEWORKS_BUILD_DIR)/mdviewer/libmdviewer.a',

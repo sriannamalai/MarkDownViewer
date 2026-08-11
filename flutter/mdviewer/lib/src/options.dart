@@ -34,6 +34,8 @@ class MdvOptions {
     this.sourceMap,
     this.themeOverrides,
     this.stylesheet,
+    this.extraCss,
+    this.codeHeader,
     this.resolver,
   });
 
@@ -47,6 +49,17 @@ class MdvOptions {
   final bool? sourceMap;
   final Map<String, String>? themeOverrides;
   final String? stylesheet;
+
+  /// Extra CSS appended AFTER whatever base styling applied (base+theme,
+  /// or [stylesheet] when set — whose replace semantics are unchanged).
+  /// Full-page assembly only; no effect in fragment mode.
+  final String? extraCss;
+
+  /// When `true`, code blocks are wrapped in an `md-code` container with a
+  /// language-label + Copy-button header (full pages also get the inline
+  /// clipboard JS). Default `false`: output unchanged.
+  final bool? codeHeader;
+
   final MdvResolver? resolver;
 
   /// The `opts_json` payload for this options set, or `null` when every
@@ -64,6 +77,8 @@ class MdvOptions {
     if (sourceMap != null) map['sourceMap'] = sourceMap;
     if (themeOverrides != null) map['themeOverrides'] = themeOverrides;
     if (stylesheet != null) map['stylesheet'] = stylesheet;
+    if (extraCss != null) map['extraCss'] = extraCss;
+    if (codeHeader != null) map['codeHeader'] = codeHeader;
     if (map.isEmpty) return null;
     return jsonEncode(map);
   }

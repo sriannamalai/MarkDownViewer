@@ -116,7 +116,24 @@ reach the boundary, and only explicitly-set (non-null) fields serialize
 JSON table for the full field list, types, and defaults — `MdvOptions`'
 fields track it 1:1 (`theme`, `fragment`, `allowRawHTML`, `mermaid`,
 `math`, `highlighting`, `maxWidth`, `sourceMap`, `themeOverrides`,
-`stylesheet`), plus the Dart-only `resolver` field below.
+`stylesheet`, `extraCss`, `codeHeader`), plus the Dart-only `resolver`
+field below.
+
+Two options landed in v0.8.0:
+
+- **`extraCss`** (`String?`) — CSS appended AFTER whatever base styling
+  applied: base+theme CSS in the default path, or the custom `stylesheet`
+  when set (`stylesheet`'s replace semantics are unchanged). Full-page
+  assembly only — no effect in fragment mode. This is the intended hook
+  for host text-scale overrides (`body{font-size:117%}`) and webview
+  `@font-face` rules with `data:` URI fonts, without fetching and
+  concatenating `base.css` yourself.
+- **`codeHeader`** (`bool?`, default off) — when `true`, each code block
+  is wrapped as `<div class="md-code">` with a header carrying the fence
+  language (`<span class="md-code-lang">`, display-uppercased via CSS;
+  `code` when unlabeled) and a `<button class="md-code-copy">Copy</button>`.
+  Full pages also get a small inline clipboard handler; fragment hosts
+  get the markup and classes and wire their own click handler.
 
 ## Resolver contract
 
@@ -159,6 +176,56 @@ typedef MdvResolver = String? Function(MdvResolveKind kind, String target);
   target at a time, on the calling thread — there is no concurrent
   resolver reentrancy to guard against within a single render.
 
+## Async vaults: pre-resolve helpers
+
+`MdvResolver` is synchronous by contract (the C ABI calls it inline during
+the render), but real vaults resolve targets with async I/O — database
+lookups, network fetches, platform-channel calls. The pre-resolve helpers
+bridge that gap without an async ABI: parse once, collect every target the
+render would ask about, resolve them with your own async code, then render
+with a sync resolver answering from the finished map.
+
+```dart
+final mdv = Mdviewer.instance;
+
+// 1. Parse once.
+final doc = mdv.parse(markdown);
+
+// 2. Collect the distinct resolvable targets (kind 0 link, 1 image,
+//    2 wiki-link — the same ABI-frozen ints the resolver receives).
+final targets = collectResolvables(doc);
+
+// 3. Prefetch asynchronously — this part is yours (vault DB, HTTP, ...).
+final resolved = <String, String>{};
+for (final t in targets.where((t) => t.kind == 1)) {
+  resolved[t.target] = await vault.imageDataUri(t.target);
+}
+
+// 4. Render with a sync resolver answering from the map; kindFilter {1}
+//    answers images only and declines everything else (default
+//    resolution applies to declined targets).
+final html = mdv.renderDoc(
+  doc,
+  options: MdvOptions(resolver: resolverFromMap(resolved, kindFilter: {1})),
+);
+```
+
+- **`collectResolvables(doc)`** walks the parsed version-1 document
+  (footnote definitions included) and returns the distinct
+  `Resolvable(kind, target)` pairs in document order. Targets are the raw
+  authored strings — exactly what the render-time resolver would receive
+  (wiki-link targets carry no `.md` fallback).
+- **`resolverFromMap(resolved, {kindFilter})`** builds an `MdvResolver`
+  that answers mapped targets verbatim (the normal resolver trust
+  contract applies — returned URLs bypass the scheme allowlist) and
+  declines the rest with `null`. `kindFilter` restricts answering to the
+  given ABI kind ints, e.g. `{1}` for images only even when a link shares
+  the same target string.
+
+This codifies the pattern the MDViewer.Mobile app's DocImages proved
+on-device: parse → collect → async prefetch (images to `data:` URIs) →
+render with the map-backed sync resolver.
+
 ## Platform loading model
 
 - **Android** — the bundled `.so` (`android/src/main/jniLibs/<abi>/
@@ -194,6 +261,13 @@ typedef MdvResolver = String? Function(MdvResolveKind kind, String target);
   (see `ios/mdviewer.podspec`'s comments for why it can't be
   `pod_target_xcconfig`); a consumer with an unusual iOS build setup that
   bypasses CocoaPods' xcconfig inheritance would need to replicate it.
+- **iOS first build after `pod install` can fail** with "Build input file
+  cannot be found" pointing at the `-force_load`ed
+  `$(PODS_XCFRAMEWORKS_BUILD_DIR)/mdviewer/libmdviewer.a` — an Xcode
+  build-ordering quirk where the app target links before CocoaPods'
+  xcframework copy script has produced the archive. Simply build again:
+  the retry succeeds and the issue does not recur until the pods are
+  reinstalled. (See the matching note in `ios/mdviewer.podspec`.)
 - **pub.dev publish is separately gated** — see Status above.
 
 ## See also
