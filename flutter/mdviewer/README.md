@@ -61,6 +61,11 @@ them:
   cd flutter/mdviewer && tool/fetch_binaries.sh
   ```
 
+  (During a pre-release window — `pubspec.yaml` already bumped but the
+  release not yet cut — set `MDVIEWER_VERSION=0.7.0` (the latest
+  released version) or the default invocation fails: there is no
+  release, and no checksum entry, for the bumped version yet.)
+
   Zip names match `.github/workflows/release-ffi.yml` exactly:
   `libmdviewer-<version>-ios.xcframework.zip` and
   `libmdviewer-<version>-android.zip` (the version has no leading `v`; the

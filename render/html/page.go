@@ -179,13 +179,17 @@ func renderPage(w io.Writer, doc *document.Document, opts Options) error {
 	if opts.CodeHeader {
 		// Inline, dependency-free clipboard wiring for the md-code-copy
 		// buttons codeBlock emits. Delegated from the document so it
-		// covers every block with one listener.
+		// covers every block with one listener. navigator.clipboard is
+		// undefined in insecure contexts (plain-http hosts), so guard it
+		// — a click no-ops instead of throwing — and swallow permission
+		// denials rather than stranding an unhandled rejection.
 		ew.write("<script>document.addEventListener('click',function(e){" +
 			"var b=e.target.closest('.md-code-copy');if(!b)return;" +
 			"var c=b.closest('.md-code').querySelector('pre');if(!c)return;" +
+			"if(!navigator.clipboard)return;" +
 			"navigator.clipboard.writeText(c.innerText).then(function(){" +
 			"var t=b.textContent;b.textContent='Copied';" +
-			"setTimeout(function(){b.textContent=t;},1200);});});</script>\n")
+			"setTimeout(function(){b.textContent=t;},1200);}).catch(function(){});});</script>\n")
 	}
 	ew.write("</body>\n</html>\n")
 	return ew.err

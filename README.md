@@ -245,8 +245,27 @@ Or replace the base stylesheet entirely:
 out, err := markdownviewer.Render(src, markdownviewer.WithStylesheet(myCSS))
 ```
 
-Both are emitted into the page's `<style>` element; `</style` sequences in
-supplied content are stripped defensively.
+Or append CSS after whatever base is in effect — the built-in base+theme
+styling by default, or a `WithStylesheet` replacement — without replacing
+it (contrast with `WithStylesheet`, which swaps the base out entirely):
+
+```go
+out, err := markdownviewer.Render(src, markdownviewer.WithExtraCSS(
+	".md-code { border-radius: 8px; }"))
+```
+
+All three are emitted into the page's `<style>` element; `</style`
+sequences in supplied content are stripped defensively.
+
+Code blocks can opt into a header row carrying the fence language and a
+Copy button:
+
+```go
+out, err := markdownviewer.Render(src, markdownviewer.WithCodeHeader())
+```
+
+Full pages also get a small inline clipboard script wiring the buttons;
+fragment hosts receive the markup only and wire their own click handler.
 
 The default layout is fluid — no `max-width` constraint, so the page fills
 its container. Opt in to a constrained width with `WithMaxWidth` (any CSS

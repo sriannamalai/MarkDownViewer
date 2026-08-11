@@ -102,7 +102,9 @@ explicit approval). The flow, in order:
 4. Append the release's mobile-zip SHA-256 checksums to
    `flutter/mdviewer/tool/checksums.txt` and bump the plugin's
    `flutter/mdviewer/pubspec.yaml` version, in one commit (until then,
-   `tool/fetch_binaries.sh` refuses to download the new artifacts).
+   `tool/fetch_binaries.sh` refuses to download the new artifacts;
+   checksums-only when the pubspec was already bumped pre-release, as
+   for 0.8.0).
 5. Tag that checksums+pubspec commit `flutter-v<ver>` and push it:
 
    ```bash
