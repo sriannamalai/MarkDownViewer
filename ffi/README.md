@@ -151,8 +151,25 @@ the library never writes through input pointers — cast as needed.
 
     {"version": 1, "theme": "auto", "fragment": false, "allowRawHTML": false,
      "mermaid": true, "math": true, "highlighting": true, "maxWidth": "",
-     "sourceMap": false, "themeOverrides": {}, "stylesheet": ""}
+     "sourceMap": false, "themeOverrides": {}, "stylesheet": "",
+     "extraCss": "", "codeHeader": false}
 
-All fields optional; unknown fields are an error. `theme` is "light",
-"dark", or "auto". `maxWidth` takes any CSS length ("860px", "70ch");
-empty = fluid. See the repository README for what each option does.
+All fields optional; unknown fields are an error — including wrong-case
+spellings of known keys (key names are matched exact-case, so
+`"extraCSS"` is rejected, not folded into `"extraCss"`). `theme` is
+"light", "dark", or "auto". `maxWidth` takes any CSS length ("860px",
+"70ch"); empty = fluid. See the repository README for what each option
+does.
+
+`extraCss` appends host CSS at the end of the page's `<style>` — after
+the base+theme styling, or after the custom `stylesheet` when one is
+set (`stylesheet` keeps its replace semantics). It is sanitized like
+`stylesheet` and applies to full-page output only; fragments carry no
+styling.
+
+`codeHeader` (default false) wraps each code block in header markup:
+`<div class="md-code">` containing a `md-code-header` bar with a
+`md-code-lang` language label (the fence language, or `code` when
+unlabeled) and a `md-code-copy` button. Full-page output also includes
+a small inline copy-to-clipboard script; fragment hosts get the
+markup+classes and wire their own click handler.

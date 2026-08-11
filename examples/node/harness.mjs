@@ -99,6 +99,33 @@ const wikiResolved = mdv.render('[[Wiki Page]]', {
 check(wikiResolved.includes('href="notes/Wiki Page.html"'), 'resolved wiki-link URL emitted verbatim');
 check(!wikiResolved.includes('Wiki Page.md'), 'resolved wiki-link does not fall back to .md default');
 
+// v0.8 options: extraCss + codeHeader.
+
+// extraCss through renderDoc: present, and appended AFTER the base
+// styling (theme tokens like --md-bg come first in <style>).
+const extraPage = mdv.renderDoc(doc, { extraCss: 'body{font-size:117%}' });
+check(extraPage.includes('body{font-size:117%}'), 'extraCss appears in the output');
+check(extraPage.indexOf('--md-bg') !== -1 &&
+  extraPage.indexOf('--md-bg') < extraPage.indexOf('body{font-size:117%}'),
+  'extraCss is appended after the base styling tokens');
+
+// codeHeader wraps fenced code with header markup + copy button.
+const codePage = mdv.renderDoc(mdv.parse('```shell\nls -la\n```\n'), { codeHeader: true });
+check(codePage.includes('class="md-code-lang">shell'), 'codeHeader emits the fence language label');
+// Assert the markup form: bare "md-code-copy" also appears in the
+// embedded base.css of every full page, opted in or not.
+check(codePage.includes('class="md-code-copy"'), 'codeHeader emits the copy button');
+
+// splitOptions serializes the new plain string/bool keys (no TypeError)
+// and both reach the wasm boundary in one call.
+const combined = mdv.render('```shell\nls\n```\n', { extraCss: '.x{color:red}', codeHeader: true });
+check(combined.includes('.x{color:red}') && combined.includes('class="md-code-copy"'),
+  'extraCss + codeHeader together pass through splitOptions to the boundary');
+
+// Wrong-case key surfaces the boundary's exact-case rejection.
+throws(() => mdv.renderDoc(doc, { extraCSS: 'x' }), 'extraCSS',
+  'wrong-case extraCSS key throws, naming the key');
+
 // Corrupt-wasm rejection + retry-after-failure, in a subprocess (the
 // singleton in THIS process already holds a good load).
 // The exact rejection wording depends on whether go.run() rejects or

@@ -91,13 +91,26 @@ Same strict version-1 options JSON as the C FFI and the rest of the
 library — see [`ffi/README.md`](https://github.com/sriannamalai/markdownviewer/blob/main/ffi/README.md#options-json) for
 the full field table (`theme`, `fragment`, `allowRawHTML`, `mermaid`,
 `math`, `highlighting`, `maxWidth`, `sourceMap`, `themeOverrides`,
-`stylesheet`). Passing `options` omitted or `undefined` uses library
+`stylesheet`, `extraCss`, `codeHeader`). Passing `options` omitted or
+`undefined` uses library
 defaults (equivalent to `null` at the JSON boundary — no version is
 injected on your behalf). `options.resolver` is the one field that
 isn't part of the JSON: it's stripped out client-side and passed to the
 wasm module as a plain callback. Every other option value must be
 JSON-serializable — `undefined` or a function value throws a
 `TypeError` rather than being silently dropped by `JSON.stringify`.
+
+Two options added in v0.8.0:
+
+- `extraCss` (string) — host CSS appended after the base styling (or
+  after a custom `stylesheet`, whose replace semantics are unchanged).
+  Sanitized like `stylesheet`; full-page output only — fragments carry
+  no styling.
+- `codeHeader` (boolean, default `false`) — wraps each code block in
+  header markup (`md-code` > `md-code-header` with a `md-code-lang`
+  language label and a `md-code-copy` button). Full pages also include
+  inline copy-to-clipboard JS; fragment hosts get the markup+classes
+  and wire their own click handler.
 
 ### Resolver
 

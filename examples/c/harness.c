@@ -291,6 +291,44 @@ int main(void) {
     mdv_free(re); re = NULL;
     mdv_free(st7.owned); /* host frees its own buffer; must not double-free */
 
+    /* ---- v0.8 options: extraCss + codeHeader ---- */
+
+    /* extraCss through mdv_render_doc: present, and appended AFTER the
+     * base styling (theme tokens like --md-bg come first in <style>). */
+    char *xh = NULL, *xe = NULL; size_t xl = 0;
+    rc = mdv_render_doc(doc, doc_len,
+                        (char *)"{\"extraCss\":\"body{font-size:117%}\"}",
+                        &xh, &xl, &xe);
+    CHECK(rc == 0 && xh != NULL, "mdv_render_doc with extraCss succeeds");
+    CHECK(xh && strstr(xh, "body{font-size:117%}") != NULL,
+          "extraCss appears in the output");
+    CHECK(xh && strstr(xh, "--md-bg") != NULL &&
+          strstr(xh, "body{font-size:117%}") != NULL &&
+          strstr(xh, "--md-bg") < strstr(xh, "body{font-size:117%}"),
+          "extraCss is appended after the base styling tokens");
+    mdv_free(xh); xh = NULL;
+
+    /* codeHeader wraps fenced code with header markup + copy button. */
+    const char *cmd_md = "```shell\nls -la\n```\n";
+    rc = mdv_render((char *)cmd_md, strlen(cmd_md),
+                    (char *)"{\"codeHeader\":true}", &xh, &xl, &xe);
+    CHECK(rc == 0 && xh != NULL, "mdv_render with codeHeader succeeds");
+    CHECK(xh && strstr(xh, "class=\"md-code-lang\">shell") != NULL,
+          "codeHeader emits the fence language label");
+    /* Assert the markup form: bare "md-code-copy" also appears in the
+     * embedded base.css of every full page, opted in or not. */
+    CHECK(xh && strstr(xh, "class=\"md-code-copy\"") != NULL,
+          "codeHeader emits the copy button");
+    mdv_free(xh); xh = NULL;
+
+    /* Wrong-case key is rejected loudly (exact-case boundary). */
+    rc = mdv_render((char *)md, md_len, (char *)"{\"extraCSS\":\"x\"}",
+                    &xh, &xl, &xe);
+    CHECK(rc != 0 && xh == NULL, "wrong-case extraCSS key fails");
+    CHECK(xe != NULL && strstr(xe, "extraCSS") != NULL,
+          "wrong-case error names the offending key");
+    mdv_free(xe); xe = NULL;
+
     /* Cleanup: every returned buffer through mdv_free; NULL is a no-op. */
     mdv_free(html); mdv_free(doc); mdv_free(html2); mdv_free(frag);
     mdv_free(NULL);

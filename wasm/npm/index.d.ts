@@ -22,6 +22,17 @@ export interface Options {
   sourceMap?: boolean;
   themeOverrides?: Record<string, string>;
   stylesheet?: string;
+  /**
+   * Extra CSS appended after the base styling (or after `stylesheet`
+   * when set). Sanitized like `stylesheet`; full-page output only.
+   */
+  extraCss?: string;
+  /**
+   * Wrap code blocks in header markup (language label + copy button).
+   * Full pages also get inline copy-to-clipboard JS; fragment hosts
+   * wire their own handler. Default false.
+   */
+  codeHeader?: boolean;
   /** Not part of the JSON boundary; stripped and passed as a callback. */
   resolver?: Resolver;
 }
