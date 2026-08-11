@@ -9,6 +9,34 @@ export type ResolveKind = 0 /* link */ | 1 /* image */ | 2 /* wiki-link */;
  */
 export type Resolver = (kind: ResolveKind, target: string) => string | null | undefined;
 
+/**
+ * Nested parser configuration: which Markdown syntax extensions the
+ * parse enables. Strictly decoded like the top level (unknown or
+ * wrong-case keys are an error). Omitted entirely = library default
+ * (every extension on). `commonmarkOnly: true` starts from pure
+ * CommonMark (no extensions) instead; the per-extension booleans are
+ * tristate overrides on top of that base — omitted keeps the base's
+ * setting, `true` enables, `false` disables. Parse-time only: affects
+ * `render` and `parse`, and is decoded but ignored by `renderDoc`
+ * (the document is already parsed). Note `parser.math` gates `$x$`
+ * syntax recognition at parse time; the top-level `math` option gates
+ * KaTeX rendering.
+ */
+export interface ParserOptions {
+  commonmarkOnly?: boolean;
+  tables?: boolean;
+  strikethrough?: boolean;
+  taskLists?: boolean;
+  linkify?: boolean;
+  footnotes?: boolean;
+  definitionLists?: boolean;
+  frontMatter?: boolean;
+  emoji?: boolean;
+  wikiLinks?: boolean;
+  math?: boolean;
+  admonitions?: boolean;
+}
+
 /** Strict version-1 options. Unknown fields are an error. */
 export interface Options {
   version?: 1;
@@ -33,6 +61,15 @@ export interface Options {
    * wire their own handler. Default false.
    */
   codeHeader?: boolean;
+  /**
+   * Emit slug `id` attributes on headings (`<h1 id="...">`). Default
+   * true; set false to omit them (intra-page #fragment links to
+   * headings stop resolving). Render-time: applies to `render` and
+   * `renderDoc`.
+   */
+  headingAnchors?: boolean;
+  /** Nested parser configuration; see ParserOptions. */
+  parser?: ParserOptions;
   /** Not part of the JSON boundary; stripped and passed as a callback. */
   resolver?: Resolver;
 }

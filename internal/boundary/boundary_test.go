@@ -99,6 +99,164 @@ func TestParseImplValidatesOptions(t *testing.T) {
 	}
 }
 
+// TestParseImplParserToggles drives every nested parser toggle through
+// the boundary and asserts it changes parse output as documented: the
+// default (all extensions on) document JSON carries the marker, the
+// toggled-off parse does not. This pins the JSON-name → parser.Config
+// field wiring, not just decoding.
+func TestParseImplParserToggles(t *testing.T) {
+	cases := []struct {
+		key    string // nested JSON key set to false
+		md     string
+		marker string // present by default, absent with the toggle off
+	}{
+		{"tables", "| a |\n| --- |\n| b |\n", `"kind":"table"`},
+		{"strikethrough", "~~x~~\n", `"kind":"strikethrough"`},
+		{"taskLists", "- [x] done\n", `"task":true`},
+		{"linkify", "visit https://example.com now\n", `"kind":"link"`},
+		{"footnotes", "a[^1]\n\n[^1]: b\n", `"kind":"footnoteRef"`},
+		{"definitionLists", "Term\n: def\n", `"kind":"definitionList"`},
+		{"frontMatter", "---\ntitle: x\n---\n\nbody\n", `"meta"`},
+		{"emoji", "hi :smile:\n", "\U0001F604"},
+		{"wikiLinks", "[[Page]]\n", `"kind":"wikiLink"`},
+		{"math", "$x^2$\n", `"kind":"mathInline"`},
+		{"admonitions", "> [!NOTE]\n> hi\n", `"kind":"admonition"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.key, func(t *testing.T) {
+			def, err := Parse([]byte(tc.md), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Contains(def, []byte(tc.marker)) {
+				t.Fatalf("default parse missing marker %q:\n%s", tc.marker, def)
+			}
+			off, err := Parse([]byte(tc.md), []byte(`{"parser": {"`+tc.key+`": false}}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bytes.Contains(off, []byte(tc.marker)) {
+				t.Fatalf("%s=false still parses marker %q:\n%s", tc.key, tc.marker, off)
+			}
+		})
+	}
+}
+
+func TestParseImplCommonmarkOnly(t *testing.T) {
+	md := []byte("~~x~~ [[W]]\n\n| a |\n| --- |\n| b |\n")
+	doc, err := Parse(md, []byte(`{"parser": {"commonmarkOnly": true}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, gone := range []string{`"kind":"strikethrough"`, `"kind":"wikiLink"`, `"kind":"table"`} {
+		if bytes.Contains(doc, []byte(gone)) {
+			t.Errorf("commonmarkOnly parse still contains %s:\n%s", gone, doc)
+		}
+	}
+	// Tristate re-enable on the commonmarkOnly base.
+	doc, err = Parse(md, []byte(`{"parser": {"commonmarkOnly": true, "tables": true}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(doc, []byte(`"kind":"table"`)) {
+		t.Errorf("commonmarkOnly+tables should parse tables:\n%s", doc)
+	}
+	if bytes.Contains(doc, []byte(`"kind":"strikethrough"`)) {
+		t.Errorf("commonmarkOnly+tables must not parse strikethrough:\n%s", doc)
+	}
+}
+
+// TestParserOptionsAbsentIsByteIdentical pins the additive-change
+// guarantee: payloads without the new fields (and their no-op spellings)
+// produce byte-identical output to the pre-v0.9 defaults.
+func TestParserOptionsAbsentIsByteIdentical(t *testing.T) {
+	md := []byte("# Hi\n\n~~x~~ [[W]]\n")
+	base, err := Render(md, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, opts := range []string{`{}`, `{"parser": {}}`, `{"parser": null}`, `{"headingAnchors": true}`} {
+		got, err := Render(md, []byte(opts), nil)
+		if err != nil {
+			t.Fatalf("Render(%s): %v", opts, err)
+		}
+		if !bytes.Equal(base, got) {
+			t.Errorf("Render(%s) differs from default output", opts)
+		}
+	}
+	pbase, err := Parse(md, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pgot, err := Parse(md, []byte(`{"parser": {}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(pbase, pgot) {
+		t.Error(`Parse with {"parser": {}} differs from default parse`)
+	}
+}
+
+func TestRenderImplParserConfig(t *testing.T) {
+	html, err := Render([]byte("[[Wiki Page]]\n"), []byte(`{"fragment": true, "parser": {"wikiLinks": false}}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(html, []byte("[[Wiki Page]]")) || bytes.Contains(html, []byte("<a ")) {
+		t.Errorf("wikiLinks=false should render wiki syntax literally: %s", html)
+	}
+}
+
+func TestRenderImplHeadingAnchors(t *testing.T) {
+	md := []byte("# Hello\n")
+	def, err := Render(md, []byte(`{"fragment": true}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(def, []byte(`<h1 id="hello">`)) {
+		t.Errorf("default should emit heading anchors: %s", def)
+	}
+	off, err := Render(md, []byte(`{"fragment": true, "headingAnchors": false}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(off, []byte("<h1>")) || bytes.Contains(off, []byte("id=")) {
+		t.Errorf("headingAnchors=false should omit heading ids: %s", off)
+	}
+	// Render-time toggle: it applies through RenderDoc too.
+	doc, err := Parse(md, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	viaDoc, err := RenderDoc(doc, []byte(`{"fragment": true, "headingAnchors": false}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(off, viaDoc) {
+		t.Error("headingAnchors=false differs between Render and RenderDoc")
+	}
+}
+
+// RenderDoc decodes-and-ignores the parser object (the document is
+// already parsed), per the options struct's documented precedent.
+func TestRenderDocIgnoresParserConfig(t *testing.T) {
+	doc, err := Parse([]byte("[[Wiki Page]]\n"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := RenderDoc(doc, []byte(`{"fragment": true}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withParser, err := RenderDoc(doc, []byte(`{"fragment": true, "parser": {"wikiLinks": false}}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(plain, withParser) {
+		t.Error("parser options must not affect RenderDoc output")
+	}
+}
+
 func TestRenderDocRoundTrip(t *testing.T) {
 	opts := []byte(`{"theme": "dark"}`)
 	direct, err := Render([]byte(sampleMD), opts, nil)

@@ -131,6 +131,22 @@ check(combined.includes('.x{color:red}') && combined.includes('class="md-code-co
 throws(() => mdv.renderDoc(doc, { extraCSS: 'x' }), 'extraCSS',
   'wrong-case extraCSS key throws, naming the key');
 
+// v0.9 options: parser config + headingAnchors.
+
+// parser.wikiLinks=false renders [[x]] as literal text.
+const noWiki = mdv.render('[[Wiki Page]]\n', { fragment: true, parser: { wikiLinks: false } });
+check(noWiki.includes('[[Wiki Page]]') && !noWiki.includes('<a '),
+  'parser.wikiLinks=false renders wiki syntax literally');
+
+// Wrong-case NESTED key is rejected, named with its path.
+throws(() => mdv.render(md, { parser: { wikilinks: false } }), 'parser.wikilinks',
+  'wrong-case nested parser key throws, naming parser.wikilinks');
+
+// headingAnchors=false drops the heading id attributes.
+const anchorless = mdv.render('# Hi\n', { fragment: true, headingAnchors: false });
+check(anchorless.includes('<h1>') && !anchorless.includes('id='),
+  'headingAnchors=false omits heading id attributes');
+
 // Corrupt-wasm rejection + retry-after-failure, in a subprocess (the
 // singleton in THIS process already holds a good load).
 // The exact rejection wording depends on whether go.run() rejects or

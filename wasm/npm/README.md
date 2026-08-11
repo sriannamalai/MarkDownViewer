@@ -91,7 +91,8 @@ Same strict version-1 options JSON as the C FFI and the rest of the
 library — see [`ffi/README.md`](https://github.com/sriannamalai/markdownviewer/blob/main/ffi/README.md#options-json) for
 the full field table (`theme`, `fragment`, `allowRawHTML`, `mermaid`,
 `math`, `highlighting`, `maxWidth`, `sourceMap`, `themeOverrides`,
-`stylesheet`, `extraCss`, `codeHeader`). Passing `options` omitted or
+`stylesheet`, `extraCss`, `codeHeader`, `headingAnchors`, `parser`).
+Passing `options` omitted or
 `undefined` uses library
 defaults (equivalent to `null` at the JSON boundary — no version is
 injected on your behalf). `options.resolver` is the one field that
@@ -111,6 +112,27 @@ Two options added in v0.8.0:
   language label and a `md-code-copy` button). Full pages also include
   inline copy-to-clipboard JS; fragment hosts get the markup+classes
   and wire their own click handler.
+
+Two options added in v0.9.0:
+
+- `headingAnchors` (boolean, default `true`) — slug `id` attributes on
+  headings. Set `false` to render headings without ids (intra-page
+  `#fragment` links to headings stop resolving). Render-time: applies
+  to `render` and `renderDoc`.
+- `parser` (object) — nested parser configuration selecting which
+  Markdown syntax extensions the parse enables, strictly decoded like
+  the top level (unknown/wrong-case nested keys throw, named as
+  `parser.<key>`). Omitted = every extension on (the library default).
+  `{ commonmarkOnly: true }` starts from pure CommonMark instead; the
+  per-extension booleans (`tables`, `strikethrough`, `taskLists`,
+  `linkify`, `footnotes`, `definitionLists`, `frontMatter`, `emoji`,
+  `wikiLinks`, `math`, `admonitions`) are tristate overrides on top of
+  that base — e.g. `{ parser: { wikiLinks: false } }` renders `[[x]]`
+  as literal text, and `{ parser: { commonmarkOnly: true, tables: true } }`
+  is CommonMark plus GFM tables. Parse-time only: affects `render` and
+  `parse`; `renderDoc` decodes and ignores it (the document is already
+  parsed). `parser.math` gates `$x$` parsing; top-level `math` gates
+  KaTeX rendering.
 
 ### Resolver
 

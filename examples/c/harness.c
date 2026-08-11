@@ -337,6 +337,36 @@ int main(void) {
           "wrong-case error names the offending key");
     mdv_free(xe); xe = NULL;
 
+    /* ---- v0.9 options: parser config + headingAnchors ---- */
+
+    /* parser.wikiLinks=false renders [[x]] as literal text. */
+    const char *wiki_md = "[[Wiki Page]]\n";
+    rc = mdv_render((char *)wiki_md, strlen(wiki_md),
+                    (char *)"{\"fragment\":true,\"parser\":{\"wikiLinks\":false}}",
+                    &xh, &xl, &xe);
+    CHECK(rc == 0 && xh != NULL && strstr(xh, "[[Wiki Page]]") != NULL &&
+          strstr(xh, "<a ") == NULL,
+          "parser.wikiLinks=false renders wiki syntax literally");
+    mdv_free(xh); xh = NULL;
+
+    /* Wrong-case NESTED key is rejected, named with its path. */
+    rc = mdv_render((char *)md, md_len,
+                    (char *)"{\"parser\":{\"wikilinks\":false}}", &xh, &xl, &xe);
+    CHECK(rc != 0 && xh == NULL && xe != NULL &&
+          strstr(xe, "parser.wikilinks") != NULL,
+          "wrong-case nested parser key fails naming parser.wikilinks");
+    mdv_free(xe); xe = NULL;
+
+    /* headingAnchors=false drops the heading id attributes. */
+    const char *h_md = "# Hi\n";
+    rc = mdv_render((char *)h_md, strlen(h_md),
+                    (char *)"{\"fragment\":true,\"headingAnchors\":false}",
+                    &xh, &xl, &xe);
+    CHECK(rc == 0 && xh != NULL && strstr(xh, "<h1>") != NULL &&
+          strstr(xh, "id=") == NULL,
+          "headingAnchors=false omits heading id attributes");
+    mdv_free(xh); xh = NULL;
+
     /* Cleanup: every returned buffer through mdv_free; NULL is a no-op. */
     mdv_free(html); mdv_free(doc); mdv_free(html2); mdv_free(frag);
     mdv_free(NULL);

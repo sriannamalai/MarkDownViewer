@@ -126,8 +126,8 @@ reach the boundary, and only explicitly-set (non-null) fields serialize
 JSON table for the full field list, types, and defaults — `MdvOptions`'
 fields track it 1:1 (`theme`, `fragment`, `allowRawHTML`, `mermaid`,
 `math`, `highlighting`, `maxWidth`, `sourceMap`, `themeOverrides`,
-`stylesheet`, `extraCss`, `codeHeader`), plus the Dart-only `resolver`
-field below.
+`stylesheet`, `extraCss`, `codeHeader`, `headingAnchors`, `parser`),
+plus the Dart-only `resolver` field below.
 
 Two options landed in v0.8.0:
 
@@ -144,6 +144,29 @@ Two options landed in v0.8.0:
   `code` when unlabeled) and a `<button class="md-code-copy">Copy</button>`.
   Full pages also get a small inline clipboard handler; fragment hosts
   get the markup and classes and wire their own click handler.
+
+Two options landed in v0.9.0:
+
+- **`headingAnchors`** (`bool?`, library default on) — slug `id`
+  attributes on headings (`<h1 id="...">`). Set `false` to render
+  headings without ids; intra-page `#fragment` links to headings stop
+  resolving. Render-time: applies to `render` and `renderDoc`.
+- **`parser`** (`MdvParserOptions?`) — nested parser configuration
+  selecting which Markdown syntax extensions the parse enables, a 1:1
+  strict-by-construction mirror of the boundary's nested `"parser"`
+  object (only explicitly-set fields serialize, under exact key names).
+  `null` means library default — every extension on.
+  `commonmarkOnly: true` starts from pure CommonMark instead; the
+  per-extension `bool?` fields (`tables`, `strikethrough`, `taskLists`,
+  `linkify`, `footnotes`, `definitionLists`, `frontMatter`, `emoji`,
+  `wikiLinks`, `math`, `admonitions`) are tristate overrides on top of
+  that base — unset keeps the base's setting, `true` enables, `false`
+  disables. So `MdvParserOptions(wikiLinks: false)` renders `[[x]]` as
+  literal text, and `MdvParserOptions(commonmarkOnly: true, tables:
+  true)` is CommonMark plus GFM tables. Parse-time only: affects
+  `render` and `parse`; `renderDoc` (already-parsed document) decodes
+  and ignores it. Note `parser.math` gates `$x$` parsing while the
+  top-level `math` gates KaTeX rendering.
 
 ## Resolver contract
 

@@ -139,6 +139,15 @@ func DisableHighlighting() Option {
 	return func(c *config) { c.render.Highlight = false }
 }
 
+// DisableHeadingAnchors omits the slug id attributes from rendered
+// headings (<h1 id="...">). Anchor ids are still computed at parse time
+// (document.Heading.AnchorID is unaffected); this only stops the HTML
+// renderer from emitting them, so intra-page #fragment links to headings
+// stop resolving.
+func DisableHeadingAnchors() Option {
+	return func(c *config) { c.render.HeadingAnchors = false }
+}
+
 // WithResolver provides a custom link/image resolution callback.
 func WithResolver(r Resolver) Option {
 	return func(c *config) { c.render.Resolver = r }

@@ -154,11 +154,19 @@ the library never writes through input pointers — cast as needed.
     {"version": 1, "theme": "auto", "fragment": false, "allowRawHTML": false,
      "mermaid": true, "math": true, "highlighting": true, "maxWidth": "",
      "sourceMap": false, "themeOverrides": {}, "stylesheet": "",
-     "extraCss": "", "codeHeader": false}
+     "extraCss": "", "codeHeader": false, "headingAnchors": true,
+     "parser": {"commonmarkOnly": false, "tables": true, "strikethrough": true,
+                "taskLists": true, "linkify": true, "footnotes": true,
+                "definitionLists": true, "frontMatter": true, "emoji": true,
+                "wikiLinks": true, "math": true, "admonitions": true}}
 
 All fields optional; unknown fields are an error — including wrong-case
 spellings of known keys (key names are matched exact-case, so
-`"extraCSS"` is rejected, not folded into `"extraCss"`). `theme` is
+`"extraCSS"` is rejected, not folded into `"extraCss"`). The nested
+`parser` object is held to the same strictness: an unknown or
+wrong-case nested key fails, named with its path (e.g.
+`unknown field "parser.wikilinks"`), and a non-object `parser` value is
+rejected outright (`null` counts as absent). `theme` is
 "light", "dark", or "auto". `maxWidth` takes any CSS length ("860px",
 "70ch"); empty = fluid. See the repository README for what each option
 does.
@@ -175,3 +183,24 @@ styling.
 unlabeled) and a `md-code-copy` button. Full-page output also includes
 a small inline copy-to-clipboard script; fragment hosts get the
 markup+classes and wire their own click handler.
+
+`headingAnchors` (default true) emits slug `id` attributes on headings
+(`<h1 id="...">`). Set false to omit them — intra-page `#fragment`
+links to headings stop resolving. Render-time: applies to `mdv_render`
+and `mdv_render_doc` (and their `_r` variants).
+
+`parser` (object; absent or `null` = library default, every extension
+on) selects which Markdown syntax extensions the parse enables — a 1:1
+mirror of the Go `parser.Config`. `"commonmarkOnly": true` starts from
+pure CommonMark (no extensions) instead of the everything-on default;
+the per-extension booleans (`tables`, `strikethrough`, `taskLists`,
+`linkify`, `footnotes`, `definitionLists`, `frontMatter`, `emoji`,
+`wikiLinks`, `math`, `admonitions`) are tristate overrides on top of
+that base — an omitted key keeps the base's setting, `true` enables,
+`false` disables. So `{"parser": {"wikiLinks": false}}` renders `[[x]]`
+as literal text, and `{"parser": {"commonmarkOnly": true, "tables":
+true}}` is CommonMark plus GFM tables. Parse-time only: it affects
+`mdv_render` and `mdv_parse`; `mdv_render_doc` decodes and ignores it
+(the document it receives is already parsed). Note `parser.math` gates
+`$x$`/`$$…$$` syntax recognition at parse time, while the top-level
+`math` option gates KaTeX rendering of already-parsed math nodes.

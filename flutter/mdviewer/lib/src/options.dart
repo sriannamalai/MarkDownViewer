@@ -13,6 +13,74 @@ enum MdvResolveKind { link, image, wikiLink }
 /// `_callWithResolver` in `mdviewer_base.dart`).
 typedef MdvResolver = String? Function(MdvResolveKind kind, String target);
 
+/// Typed, strict-by-construction mirror of the boundary's nested
+/// `"parser"` options object: which Markdown syntax extensions the parse
+/// enables (a 1:1 mirror of the Go `parser.Config`).
+///
+/// Omitting [MdvOptions.parser] entirely means "library default" — every
+/// extension on. [commonmarkOnly] starts from pure CommonMark (no
+/// extensions) instead; the per-extension fields are tristate overrides
+/// on top of that base: `null` (unset) keeps the base's setting, `true`
+/// enables, `false` disables. So `MdvParserOptions(wikiLinks: false)`
+/// renders `[[x]]` as literal text, and
+/// `MdvParserOptions(commonmarkOnly: true, tables: true)` is CommonMark
+/// plus GFM tables.
+///
+/// Parse-time only: affects `render` and `parse`; `renderDoc` receives
+/// an already-parsed document, so the boundary decodes and ignores it
+/// there. Note [math] gates `$x$` syntax recognition at parse time,
+/// while [MdvOptions.math] gates KaTeX rendering.
+class MdvParserOptions {
+  const MdvParserOptions({
+    this.commonmarkOnly,
+    this.tables,
+    this.strikethrough,
+    this.taskLists,
+    this.linkify,
+    this.footnotes,
+    this.definitionLists,
+    this.frontMatter,
+    this.emoji,
+    this.wikiLinks,
+    this.math,
+    this.admonitions,
+  });
+
+  final bool? commonmarkOnly;
+  final bool? tables;
+  final bool? strikethrough;
+  final bool? taskLists;
+  final bool? linkify;
+  final bool? footnotes;
+  final bool? definitionLists;
+  final bool? frontMatter;
+  final bool? emoji;
+  final bool? wikiLinks;
+  final bool? math;
+  final bool? admonitions;
+
+  /// The nested `"parser"` JSON object: only explicitly-set (non-null)
+  /// fields serialize, under their exact boundary key names. An empty
+  /// map is still meaningful ("parser present, all defaults") and
+  /// behaves identically to omitting [MdvOptions.parser].
+  Map<String, dynamic> toJson() {
+    final map = <String, dynamic>{};
+    if (commonmarkOnly != null) map['commonmarkOnly'] = commonmarkOnly;
+    if (tables != null) map['tables'] = tables;
+    if (strikethrough != null) map['strikethrough'] = strikethrough;
+    if (taskLists != null) map['taskLists'] = taskLists;
+    if (linkify != null) map['linkify'] = linkify;
+    if (footnotes != null) map['footnotes'] = footnotes;
+    if (definitionLists != null) map['definitionLists'] = definitionLists;
+    if (frontMatter != null) map['frontMatter'] = frontMatter;
+    if (emoji != null) map['emoji'] = emoji;
+    if (wikiLinks != null) map['wikiLinks'] = wikiLinks;
+    if (math != null) map['math'] = math;
+    if (admonitions != null) map['admonitions'] = admonitions;
+    return map;
+  }
+}
+
 /// Typed, strict-by-construction options for [Mdviewer.render],
 /// [Mdviewer.parse], and [Mdviewer.renderDoc].
 ///
@@ -36,6 +104,8 @@ class MdvOptions {
     this.stylesheet,
     this.extraCss,
     this.codeHeader,
+    this.headingAnchors,
+    this.parser,
     this.resolver,
   });
 
@@ -60,6 +130,17 @@ class MdvOptions {
   /// clipboard JS). Default `false`: output unchanged.
   final bool? codeHeader;
 
+  /// Slug `id` attributes on headings (`<h1 id="...">`). Library default
+  /// `true`; set `false` to omit them (intra-page `#fragment` links to
+  /// headings stop resolving). Render-time: applies to `render` and
+  /// `renderDoc`.
+  final bool? headingAnchors;
+
+  /// Nested parser configuration (which syntax extensions the parse
+  /// enables); see [MdvParserOptions]. `null` means library default —
+  /// every extension on.
+  final MdvParserOptions? parser;
+
   final MdvResolver? resolver;
 
   /// The `opts_json` payload for this options set, or `null` when every
@@ -79,6 +160,8 @@ class MdvOptions {
     if (stylesheet != null) map['stylesheet'] = stylesheet;
     if (extraCss != null) map['extraCss'] = extraCss;
     if (codeHeader != null) map['codeHeader'] = codeHeader;
+    if (headingAnchors != null) map['headingAnchors'] = headingAnchors;
+    if (parser != null) map['parser'] = parser!.toJson();
     if (map.isEmpty) return null;
     return jsonEncode(map);
   }

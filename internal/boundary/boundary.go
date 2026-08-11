@@ -27,14 +27,21 @@ func Render(md, optsJSON []byte, resolver markdownviewer.Resolver) ([]byte, erro
 	return markdownviewer.Render(md, o.toFacadeOptions(resolver)...)
 }
 
-// Parse parses markdown into version-1 document JSON. Options are
-// validated for consistency with the other calls, but no current field
-// affects parsing.
+// Parse parses markdown into version-1 document JSON. The nested
+// "parser" options object selects the syntax-extension set; every other
+// field is validated for consistency with the other calls but does not
+// affect parsing.
 func Parse(md, optsJSON []byte) ([]byte, error) {
-	if _, err := decodeOptions(optsJSON); err != nil {
+	o, err := decodeOptions(optsJSON)
+	if err != nil {
 		return nil, err
 	}
-	doc, err := markdownviewer.Parse(md)
+	var doc *document.Document
+	if o.Parser != nil {
+		doc, err = markdownviewer.ParseWith(md, o.Parser.toConfig())
+	} else {
+		doc, err = markdownviewer.Parse(md)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -43,6 +50,9 @@ func Parse(md, optsJSON []byte) ([]byte, error) {
 
 // RenderDoc renders a version-1 document JSON to HTML per the strict
 // version-1 options JSON; resolver may be nil for default resolution.
+// The nested "parser" options object is decoded (and validated) but has
+// no effect here: the document is already parsed, and parser config is a
+// parse-time concern (same precedent as theme being ignored by Parse).
 func RenderDoc(docJSON, optsJSON []byte, resolver markdownviewer.Resolver) ([]byte, error) {
 	o, err := decodeOptions(optsJSON)
 	if err != nil {

@@ -244,6 +244,24 @@ func TestWithParserConfig(t *testing.T) {
 	}
 }
 
+func TestDisableHeadingAnchors(t *testing.T) {
+	src := []byte("# Hi\n")
+	def, err := Render(src, Fragment())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(def), `<h1 id="hi">Hi</h1>`) {
+		t.Fatalf("default render should carry the heading anchor id: %q", def)
+	}
+	out, err := Render(src, Fragment(), DisableHeadingAnchors())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "<h1>Hi</h1>") || strings.Contains(string(out), "id=") {
+		t.Fatalf("DisableHeadingAnchors should omit the id attribute: %q", out)
+	}
+}
+
 func TestFacadeParseWith(t *testing.T) {
 	doc, err := ParseWith([]byte("~~x~~\n"), parser.CommonMarkOnly())
 	if err != nil {

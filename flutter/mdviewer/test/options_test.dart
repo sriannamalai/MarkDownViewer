@@ -3,9 +3,10 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mdviewer/mdviewer.dart';
 
-// Serialization coverage for the v0.8.0 options (extraCss, codeHeader),
-// plus one host-dylib integration render proving the Dart → options JSON →
-// FFI path lands both options in the output page.
+// Serialization coverage for the v0.8.0 options (extraCss, codeHeader)
+// and the v0.9.0 options (headingAnchors, nested parser object), plus
+// host-dylib integration renders proving the Dart → options JSON → FFI
+// path lands the options in the output page.
 void main() {
   test('extraCss serializes under exactly "extraCss" when set', () {
     final json = const MdvOptions(extraCss: 'body{font-size:117%}').toJson();
@@ -58,5 +59,43 @@ void main() {
     expect(page, contains('md-code-lang'));
     expect(page, contains('md-code-copy'));
     expect(page, contains('shell'));
+  });
+
+  test('parser options serialize nested under exactly "parser" with exact '
+      'boundary key names, only when set', () {
+    final json = const MdvOptions(
+      headingAnchors: false,
+      parser: MdvParserOptions(
+        commonmarkOnly: true,
+        tables: true,
+        wikiLinks: false,
+      ),
+    ).toJson();
+    expect(json, isNotNull);
+    expect(jsonDecode(json!), {
+      'headingAnchors': false,
+      'parser': {'commonmarkOnly': true, 'tables': true, 'wikiLinks': false},
+    });
+    // Unset nested fields never serialize; an all-null parser object is
+    // an explicit empty {"parser":{}} (boundary default behavior).
+    expect(jsonDecode(const MdvOptions(parser: MdvParserOptions()).toJson()!), {
+      'parser': <String, dynamic>{},
+    });
+  });
+
+  test('host dylib: parser.wikiLinks=false renders [[x]] literally and '
+      'headingAnchors=false drops heading ids', () {
+    final page = Mdviewer.instance.render(
+      '# Hi\n\n[[Wiki Page]]\n',
+      options: const MdvOptions(
+        fragment: true,
+        headingAnchors: false,
+        parser: MdvParserOptions(wikiLinks: false),
+      ),
+    );
+    expect(page, contains('[[Wiki Page]]'));
+    expect(page, isNot(contains('<a ')));
+    expect(page, contains('<h1>'));
+    expect(page, isNot(contains('id=')));
   });
 }
