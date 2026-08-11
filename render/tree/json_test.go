@@ -35,14 +35,18 @@ func TestEnvelopeStrictness(t *testing.T) {
 }
 
 func TestWireFieldPresence(t *testing.T) {
-	// runs is null (not omitted) while token runs are stubbed; text is
-	// always present.
+	// runs is null (not omitted) when highlighting is off or the
+	// language is unknown, an array of {text,tokenType} otherwise; text
+	// is always present.
 	code := marshal(t, "```go\npackage x\n```\n")
-	if !strings.Contains(code, `"runs":null`) {
-		t.Fatalf("codeBlock runs not null: %s", code)
+	if !strings.Contains(code, `"runs":[{"text":"package","tokenType":"KeywordNamespace"}`) {
+		t.Fatalf("codeBlock runs with highlighting on: %s", code)
 	}
 	if !strings.Contains(code, `"label":"go"`) || !strings.Contains(code, `"text":"package x\n"`) {
 		t.Fatalf("codeBlock fields: %s", code)
+	}
+	if bare := marshal(t, "```\nbare\n```\n"); !strings.Contains(bare, `"runs":null`) {
+		t.Fatalf("no-language codeBlock runs not null: %s", bare)
 	}
 
 	// task tri-state: null | false | true, always present.

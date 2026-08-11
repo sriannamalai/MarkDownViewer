@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/sriannamalai/markdownviewer/document"
+	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
 	"github.com/sriannamalai/markdownviewer/render/internal/derive"
 	"github.com/sriannamalai/markdownviewer/resolve"
 )
@@ -26,9 +27,13 @@ import (
 //     AllowRawHTML governs ONLY raw HTML: URL policy (resolve.SafeURL)
 //     always applies — a blocked destination is reported as url:"" +
 //     blocked:true and the host decides what to do with it.
-//   - Highlighting: reserved seam for code token runs; token runs land
-//     in a follow-up change, so today CodeBlock.Runs is always nil
-//     regardless of this flag.
+//   - Highlighting: code blocks carry token runs (CodeBlock.Runs) from
+//     the same chroma tokenise seam the HTML renderer highlights
+//     through (htmlrender.TokenRuns, cached there). Off — or on with an
+//     unknown/missing language, or when chroma cannot reproduce the
+//     code text exactly — leaves Runs nil (wire: null) and the host
+//     renders Text plain, the tree analogue of the HTML renderer's
+//     fallback-to-plain path.
 type Options struct {
 	Resolver       resolve.Resolver // optional hook to rewrite link/image/wiki-link targets; nil uses default resolution
 	HeadingAnchors bool             // anchor ids on headings
@@ -213,10 +218,21 @@ func (b *builder) block(n document.Node) Block {
 
 // codeBlock builds a CodeBlock (directly, or as the math/mermaid-off
 // fallback — the tree analogue of the HTML renderer's fallback to a
-// plain code block). Token runs are a follow-up: Runs stays nil.
+// plain code block). With Options.Highlighting and a known language it
+// carries token runs from the shared tokenise seam; the cached slice is
+// copied into the tree's own type so no Build output aliases the cache.
 func (b *builder) codeBlock(span document.Span, language, code string) *CodeBlock {
-	return &CodeBlock{Span: span, ID: b.id(document.KindCodeBlock, span),
+	cb := &CodeBlock{Span: span, ID: b.id(document.KindCodeBlock, span),
 		Language: language, Label: derive.CodeLabel(language), Text: code}
+	if b.opts.Highlighting {
+		if runs, ok := htmlrender.TokenRuns(code, language); ok {
+			cb.Runs = make([]TokenRun, len(runs))
+			for i, r := range runs {
+				cb.Runs[i] = TokenRun{Text: r.Text, TokenType: r.TokenType}
+			}
+		}
+	}
+	return cb
 }
 
 func (b *builder) listItem(li *document.ListItem) ListItem {

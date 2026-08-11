@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/styles"
 	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
 	"github.com/sriannamalai/markdownviewer/theme"
 )
@@ -318,8 +321,10 @@ func TestAssetImpl(t *testing.T) {
 		"base.css":         {"--md-max-width"},
 		"theme-light.css":  {"--md-bg", ".chroma"},
 		"theme-dark.css":   {"--md-bg", ".chroma"},
-		"theme-light.json": {"--md-bg", `"version"`},
-		"theme-dark.json":  {"--md-bg", `"version"`},
+		"theme-light.json":     {"--md-bg", `"version"`},
+		"theme-dark.json":      {"--md-bg", `"version"`},
+		"highlight-light.json": {`"colors"`, `"Keyword"`, `"version"`},
+		"highlight-dark.json":  {`"colors"`, `"Keyword"`, `"version"`},
 	}
 	for name, wants := range markers {
 		got, err := Asset(name)
@@ -396,13 +401,98 @@ func TestAssetImplThemeJSON(t *testing.T) {
 	}
 }
 
+func TestAssetImplHighlightJSON(t *testing.T) {
+	hexColor := regexp.MustCompile(`^#[0-9a-f]{6}$`)
+	cases := []struct {
+		name string
+		want theme.Theme
+	}{
+		{"highlight-light.json", theme.Light()},
+		{"highlight-dark.json", theme.Dark()},
+	}
+	for _, tc := range cases {
+		got, err := Asset(tc.name)
+		if err != nil {
+			t.Fatalf("Asset(%q): %v", tc.name, err)
+		}
+		var decoded struct {
+			Version int               `json:"version"`
+			Style   string            `json:"style"`
+			Colors  map[string]string `json:"colors"`
+		}
+		if err := json.Unmarshal(got, &decoded); err != nil {
+			t.Fatalf("Asset(%q): not valid JSON: %v", tc.name, err)
+		}
+		if decoded.Version != 1 {
+			t.Errorf("Asset(%q): version = %d, want 1", tc.name, decoded.Version)
+		}
+		if decoded.Style != tc.want.ChromaStyle {
+			t.Errorf("Asset(%q): style = %q, want the theme's chroma style %q",
+				tc.name, decoded.Style, tc.want.ChromaStyle)
+		}
+		if len(decoded.Colors) == 0 {
+			t.Fatalf("Asset(%q): colors map is empty", tc.name)
+		}
+		for tt, color := range decoded.Colors {
+			if !hexColor.MatchString(color) {
+				t.Errorf("Asset(%q): colors[%q] = %q is not #rrggbb", tc.name, tt, color)
+			}
+		}
+		// Cross-check against the style object — the single source of
+		// truth both this asset and the chroma HTML CSS derive from: for
+		// a handful of token types, the JSON color must equal the
+		// foreground the HTML formatter resolves for the same style
+		// (inherited entry minus the Background entry's fields).
+		style := styles.Get(tc.want.ChromaStyle)
+		bg := style.Get(chroma.Background)
+		for _, tt := range []chroma.TokenType{chroma.Keyword, chroma.LiteralString, chroma.Comment, chroma.NameFunction} {
+			entry := style.Get(tt).Sub(bg)
+			if !entry.Colour.IsSet() {
+				t.Fatalf("style %q: token %s has no foreground — pick a different cross-check token", tc.want.ChromaStyle, tt)
+			}
+			if got, want := decoded.Colors[tt.String()], entry.Colour.String(); got != want {
+				t.Errorf("Asset(%q): colors[%q] = %q, want the style's %q", tc.name, tt.String(), got, want)
+			}
+		}
+		// Every standard token type must be present exactly when the
+		// style resolves a foreground for it (no stray keys) — the same
+		// universe the chroma HTML formatter's WriteCSS walks, so the
+		// asset covers exactly what the CSS covers.
+		wantKeys := 0
+		for tt := range chroma.StandardTypes {
+			entry := style.Get(tt)
+			if tt != chroma.Background {
+				entry = entry.Sub(bg)
+			}
+			_, present := decoded.Colors[tt.String()]
+			if entry.Colour.IsSet() != present {
+				t.Errorf("Asset(%q): token %s present=%v, want %v", tc.name, tt.String(), present, entry.Colour.IsSet())
+			}
+			if entry.Colour.IsSet() {
+				wantKeys++
+			}
+		}
+		if len(decoded.Colors) != wantKeys {
+			t.Errorf("Asset(%q): %d colors, want %d (stray keys?)", tc.name, len(decoded.Colors), wantKeys)
+		}
+		// Deterministic: a second fetch is byte-identical.
+		again, err := Asset(tc.name)
+		if err != nil {
+			t.Fatalf("Asset(%q) second call: %v", tc.name, err)
+		}
+		if !bytes.Equal(got, again) {
+			t.Errorf("Asset(%q): two calls differ:\n%s\n%s", tc.name, got, again)
+		}
+	}
+}
+
 func TestAssetImplUnknown(t *testing.T) {
 	for _, name := range []string{"", "bogus.js", "Mermaid.js"} {
 		_, err := Asset(name)
 		if err == nil {
 			t.Fatalf("Asset(%q): want error", name)
 		}
-		for _, valid := range []string{"mermaid.js", "theme-dark.css", "theme-light.json", "theme-dark.json"} {
+		for _, valid := range []string{"mermaid.js", "theme-dark.css", "theme-light.json", "theme-dark.json", "highlight-light.json", "highlight-dark.json"} {
 			if !strings.Contains(err.Error(), valid) {
 				t.Errorf("Asset(%q): error does not list valid name %q: %v", name, valid, err)
 			}

@@ -53,6 +53,13 @@ check(themeData.version === 1 && themeData.mode === 'light',
   'theme-light.json is version-1 palette data with mode light');
 check(typeof themeData.vars === 'object' && typeof themeData.vars['--md-bg'] === 'string',
   'theme-light.json vars carry the --md-bg token');
+// Highlight color assets (v0.10). renderTree itself lands with the next
+// task's exports; its checks arrive there.
+const hlData = JSON.parse(new TextDecoder().decode(mdv.asset('highlight-dark.json')));
+check(hlData.version === 1 && hlData.style === 'github-dark' && typeof hlData.colors === 'object',
+  'highlight-dark.json is version-1 color data for the github-dark style');
+check(/^#[0-9a-f]{6}$/.test(hlData.colors.Keyword),
+  'highlight-dark.json maps Keyword to a #rrggbb color');
 
 // Resolver: resolve, decline, kinds, trust contract, throw.
 const rmd = '![alt](img/photo.png)\n\n[click](docs/guide.md)\n\n[[Wiki Page]]\n';

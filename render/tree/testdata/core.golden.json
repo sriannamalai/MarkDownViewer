@@ -994,7 +994,12 @@
       "id": "a0c3260785d19cc0",
       "language": "text",
       "label": "text",
-      "runs": null,
+      "runs": [
+        {
+          "text": "plain fenced code block\nline two\n",
+          "tokenType": "Text"
+        }
+      ],
       "text": "plain fenced code block\nline two\n"
     },
     {

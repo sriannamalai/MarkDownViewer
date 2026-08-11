@@ -171,6 +171,18 @@ int main(void) {
           "theme-light.json is version-1 JSON with mode light");
     mdv_free(asset); asset = NULL;
 
+    /* Highlight color assets (v0.10). Token-run rendering itself
+     * (mdv_render_tree*) lands with the next task's symbols; its
+     * checks arrive there. */
+    rc = mdv_asset((char *)"highlight-light.json", &asset, &asset_len, &asset_err);
+    CHECK(rc == 0 && asset != NULL && strstr(asset, "\"colors\"") != NULL &&
+          strstr(asset, "\"Keyword\"") != NULL,
+          "highlight-light.json carries a colors map with a Keyword entry");
+    CHECK(asset != NULL && strstr(asset, "\"version\":1") != NULL &&
+          strstr(asset, "\"style\":\"github\"") != NULL,
+          "highlight-light.json is version-1 data for the github style");
+    mdv_free(asset); asset = NULL;
+
     rc = mdv_asset((char *)"bogus.js", &asset, &asset_len, &asset_err);
     CHECK(rc != 0 && asset_err != NULL && strstr(asset_err, "mermaid.js") != NULL,
           "unknown asset error lists valid names");

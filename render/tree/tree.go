@@ -156,10 +156,10 @@ type TokenRun struct {
 
 // CodeBlock is a fenced or indented code block. Text always carries the
 // full literal source. Runs is nil (wire: null) when highlighting is
-// off or no token runs are available, an array otherwise.
-//
-// NOTE: token runs land in a follow-up change; today Build always
-// leaves Runs nil.
+// off or no token runs are available (unknown/missing language, chroma
+// failure), an array otherwise — whose Text fields concatenate to
+// exactly Text, so a host styling runs and a host printing Text show
+// the same characters.
 //
 // Wire: {"kind":"codeBlock",span,id,"language","label","runs","text"}
 // — "runs" and "text" always present.

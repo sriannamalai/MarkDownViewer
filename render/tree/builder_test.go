@@ -1,9 +1,14 @@
 package tree_test
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/sriannamalai/markdownviewer/document"
@@ -75,15 +80,151 @@ func TestListShapes(t *testing.T) {
 	}
 }
 
-func TestCodeBlockLabelAndRunsStub(t *testing.T) {
+func TestCodeBlockLabelAndRuns(t *testing.T) {
 	tr := buildDefault(t, "```go\npackage x\n```\n\n```\nbare\n```\n")
 	cb := tr.Blocks[0].(*tree.CodeBlock)
-	if cb.Language != "go" || cb.Label != "go" || cb.Text != "package x\n" || cb.Runs != nil {
+	if cb.Language != "go" || cb.Label != "go" || cb.Text != "package x\n" {
 		t.Fatalf("go block: %+v", cb)
 	}
+	if cb.Runs == nil {
+		t.Fatal("go block with highlighting on: runs missing")
+	}
+	// No-language fence: no runs regardless of highlighting.
 	bare := tr.Blocks[1].(*tree.CodeBlock)
 	if bare.Language != "" || bare.Label != "code" || bare.Runs != nil {
 		t.Fatalf("bare block: %+v", bare)
+	}
+}
+
+// TestCodeBlockRunsPinnedGolden pins one Go fence's exact runs — the
+// text slicing AND chroma's canonical TokenType.String() names — as
+// they surface through Build (the wire contract native hosts consume).
+func TestCodeBlockRunsPinnedGolden(t *testing.T) {
+	tr := buildDefault(t, "```go\nx := 42 // n\n```\n")
+	cb := tr.Blocks[0].(*tree.CodeBlock)
+	want := []tree.TokenRun{
+		{Text: "x", TokenType: "NameOther"},
+		{Text: " ", TokenType: "TextWhitespace"},
+		{Text: ":=", TokenType: "Operator"},
+		{Text: " ", TokenType: "TextWhitespace"},
+		{Text: "42", TokenType: "LiteralNumberInteger"},
+		{Text: " ", TokenType: "TextWhitespace"},
+		{Text: "// n", TokenType: "CommentSingle"},
+		{Text: "\n", TokenType: "TextWhitespace"},
+	}
+	if !reflect.DeepEqual(cb.Runs, want) {
+		t.Fatalf("pinned runs:\n got %#v\nwant %#v", cb.Runs, want)
+	}
+}
+
+// TestCodeBlockRunsToggles: highlighting off or an unknown language
+// leaves Runs nil — the schema's null, the host's render-Text-plain
+// signal.
+func TestCodeBlockRunsToggles(t *testing.T) {
+	md := "```go\npackage x\n```\n"
+	off := tree.DefaultOptions()
+	off.Highlighting = false
+	if cb := build(t, md, off).Blocks[0].(*tree.CodeBlock); cb.Runs != nil {
+		t.Fatalf("highlighting off: runs = %v, want nil", cb.Runs)
+	}
+	unknown := buildDefault(t, "```nosuchlang\nzzz\n```\n").Blocks[0].(*tree.CodeBlock)
+	if unknown.Runs != nil {
+		t.Fatalf("unknown language: runs = %v, want nil", unknown.Runs)
+	}
+	// Math/mermaid fallback code blocks go through the same seam: a
+	// mermaid-off diagram becomes a codeBlock whose language is the
+	// engine name — unknown to chroma, so runs stay nil.
+	noMermaid := tree.DefaultOptions()
+	noMermaid.Mermaid = false
+	if cb := build(t, "```mermaid\ngraph TD\n```\n", noMermaid).Blocks[0].(*tree.CodeBlock); cb.Runs != nil {
+		t.Fatalf("mermaid fallback: runs = %v, want nil", cb.Runs)
+	}
+}
+
+// TestCodeBlockRunsConcatenation is the tree-level parity property: for
+// a matrix of languages and snippets, join(runs.text) == text whenever
+// runs are present.
+func TestCodeBlockRunsConcatenation(t *testing.T) {
+	langs := []string{"go", "python", "javascript", "json", "c", "rust", "html", "shell", "text"}
+	snippets := []string{
+		"x = 1\n",
+		"if a < b && c > d { panic(\"<oops> & such\") }\n",
+		"# unicode: héllo wörld — 世界 🚀\nprint('done')\n",
+		"\tleading tab\n  trailing spaces  \n",
+		"no trailing newline",
+	}
+	for _, lang := range langs {
+		for si, code := range snippets {
+			md := "```" + lang + "\n" + code + "\n```\n"
+			cb := buildDefault(t, md).Blocks[0].(*tree.CodeBlock)
+			if cb.Runs == nil {
+				continue // fallback-to-plain is always legal
+			}
+			var joined strings.Builder
+			for _, r := range cb.Runs {
+				joined.WriteString(r.Text)
+			}
+			if joined.String() != cb.Text {
+				t.Errorf("lang %q snippet %d: join(runs) != text\n got %q\nwant %q",
+					lang, si, joined.String(), cb.Text)
+			}
+		}
+	}
+}
+
+// TestConcurrentBuildRuns builds a code-heavy document from many
+// goroutines; under -race this gates the shared runs cache behind
+// Build, and every tree must marshal identically to the sequential one.
+func TestConcurrentBuildRuns(t *testing.T) {
+	var md strings.Builder
+	for i := 0; i < 12; i++ {
+		fmt.Fprintf(&md, "```go\nvar v%d = %d // fence\n```\n\n```python\nx%d = %d\n```\n\n", i, i, i, i)
+	}
+	src := md.String()
+	doc, err := parser.Parse([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := tree.DefaultOptions()
+	opts.Source = []byte(src)
+	seq, err := tree.Build(doc, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := json.Marshal(seq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const goroutines = 16
+	errs := make([]error, goroutines)
+	var wg sync.WaitGroup
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		go func(g int) {
+			defer wg.Done()
+			for i := 0; i < 5; i++ {
+				tr, err := tree.Build(doc, opts)
+				if err != nil {
+					errs[g] = err
+					return
+				}
+				got, err := json.Marshal(tr)
+				if err != nil {
+					errs[g] = err
+					return
+				}
+				if !bytes.Equal(got, want) {
+					errs[g] = fmt.Errorf("concurrent build diverges from sequential")
+					return
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+	for g, err := range errs {
+		if err != nil {
+			t.Fatalf("goroutine %d: %v", g, err)
+		}
 	}
 }
 

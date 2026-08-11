@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/styles"
 	markdownviewer "github.com/sriannamalai/markdownviewer"
 	"github.com/sriannamalai/markdownviewer/assets"
 	"github.com/sriannamalai/markdownviewer/document"
@@ -73,7 +75,9 @@ func RenderDoc(docJSON, optsJSON []byte, resolver markdownviewer.Resolver) ([]by
 // the one file. Standalone theme-dark.css needs no light-rule
 // neutralization; that pairing concern exists only inside full pages.
 // theme-*.json carry the same palette as data (see themeJSON) so native
-// hosts don't have to parse CSS to recover colors.
+// hosts don't have to parse CSS to recover colors, and
+// highlight-*.json carry the matching chroma styles' token colors as
+// data (see highlightJSON) for hosts styling render-tree token runs.
 func Asset(name string) ([]byte, error) {
 	switch name {
 	case "mermaid.js":
@@ -92,8 +96,12 @@ func Asset(name string) ([]byte, error) {
 		return themeJSONAsset(theme.Light())
 	case "theme-dark.json":
 		return themeJSONAsset(theme.Dark())
+	case "highlight-light.json":
+		return highlightJSONAsset(theme.Light())
+	case "highlight-dark.json":
+		return highlightJSONAsset(theme.Dark())
 	}
-	return nil, fmt.Errorf("unknown asset %q (valid: base.css, katex.css, katex.js, mermaid.js, theme-dark.css, theme-dark.json, theme-light.css, theme-light.json)", name)
+	return nil, fmt.Errorf("unknown asset %q (valid: base.css, highlight-dark.json, highlight-light.json, katex.css, katex.js, mermaid.js, theme-dark.css, theme-dark.json, theme-light.css, theme-light.json)", name)
 }
 
 func composedThemeCSS(t theme.Theme) ([]byte, error) {
@@ -124,4 +132,46 @@ func themeJSONAsset(t theme.Theme) ([]byte, error) {
 		ChromaStyle: t.ChromaStyle,
 		Vars:        t.Vars,
 	})
+}
+
+// highlightJSON is the version-1 shape of the highlight-*.json assets:
+// chroma token-type name → foreground color, for hosts styling the
+// render tree's code token runs (CodeBlock runs carry
+// TokenType.String() names — the same names used as keys here). Only
+// token types the style resolves a foreground color for are present;
+// hosts fall back to their default text color for any missing type.
+type highlightJSON struct {
+	Version int               `json:"version"`
+	Style   string            `json:"style"`  // chroma style name, e.g. "github"
+	Colors  map[string]string `json:"colors"` // TokenType.String() → "#rrggbb"
+}
+
+// highlightJSONAsset resolves the theme's paired chroma style into
+// token colors — the SAME styles.Get(t.ChromaStyle) object the CSS path
+// (htmlrender.HighlightCSS via the chroma HTML formatter) formats
+// against, walked the same way that formatter's WriteCSS is: every
+// standard token type (chroma.StandardTypes, not just the style's
+// direct entries — the CSS expands category inheritance the same way,
+// e.g. github-dark colors LiteralStringSingle ".s1" via its Literal
+// entry), resolved through Style.Get's inheritance and stripped of the
+// Background entry's fields for non-background types. Data and CSS
+// therefore cannot drift, and a run's concrete tokenType is always a
+// direct key — hosts never need chroma's category-fallback walk.
+// Colors are chroma.Colour.String() hex-normalized "#rrggbb". Output is
+// deterministic: struct fields marshal in declaration order and
+// encoding/json emits map keys sorted.
+func highlightJSONAsset(t theme.Theme) ([]byte, error) {
+	style := styles.Get(t.ChromaStyle)
+	bg := style.Get(chroma.Background)
+	colors := map[string]string{}
+	for tt := range chroma.StandardTypes {
+		entry := style.Get(tt)
+		if tt != chroma.Background {
+			entry = entry.Sub(bg)
+		}
+		if entry.Colour.IsSet() {
+			colors[tt.String()] = entry.Colour.String()
+		}
+	}
+	return json.Marshal(highlightJSON{Version: 1, Style: t.ChromaStyle, Colors: colors})
 }

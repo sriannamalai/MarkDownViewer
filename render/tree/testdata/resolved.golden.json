@@ -607,7 +607,24 @@
       "id": "df1d036cbbf3df46",
       "language": "go",
       "label": "go",
-      "runs": null,
+      "runs": [
+        {
+          "text": "package",
+          "tokenType": "KeywordNamespace"
+        },
+        {
+          "text": " ",
+          "tokenType": "TextWhitespace"
+        },
+        {
+          "text": "main",
+          "tokenType": "NameOther"
+        },
+        {
+          "text": "\n",
+          "tokenType": "TextWhitespace"
+        }
+      ],
       "text": "package main\n"
     },
     {
