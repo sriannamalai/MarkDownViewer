@@ -53,11 +53,16 @@ documented on the Go `render/tree` package
 ([pkg.go.dev/github.com/sriannamalai/markdownviewer/render/tree](https://pkg.go.dev/github.com/sriannamalai/markdownviewer/render/tree));
 code blocks carry chroma token runs whose colors the
 `highlight-*.json` assets map (see "Assets"). `mdv_render_tree_doc`
-builds the same tree from `mdv_parse` output — with one difference:
-block `id`s are content hashes over the block's source bytes on the
-markdown path, but the document-JSON path has no source at hand, so its
-ids take a deterministic positional fallback form (stable for a given
-document, not content-stable across edits).
+builds the same tree from `mdv_parse` output — with one difference in
+block `id`s: on the markdown path, blocks with source spans get content
+hashes over their source bytes, while spanless blocks — and every block
+on the document-JSON path, which has no source at hand — fall back to a
+deterministic positional id (stable for a given document, not
+content-stable across edits). Content-hash ids mean identity IS
+content: two byte-identical source blocks share the same id by design
+(that is what makes them usable for host-side diffing), so hosts
+needing unique keys must disambiguate equal ids by position — e.g. key
+by (id, occurrence index).
 
 **Compiler note**: the generated `libmdviewer.h` embeds two static
 helper functions from the cgo preamble (`mdv_call_resolver`,

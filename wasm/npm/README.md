@@ -98,10 +98,14 @@ only, `headingAnchors`, `highlighting`, `math`, `mermaid`,
 `allowRawHTML`); the HTML-only fields (`theme`, `themeOverrides`,
 `fragment`, `maxWidth`, `sourceMap`, `stylesheet`, `extraCss`,
 `codeHeader`) are decoded and ignored, and node spans are always
-included. Block `id`s are content hashes over the block's source bytes
-via `renderTree`; `renderTreeDoc` has no source at hand, so its ids
-take a deterministic positional fallback form. Wire-schema reference:
-the Go
+included. Block `id`s: via `renderTree`, blocks with source spans get
+content hashes over their source bytes; spanless blocks — and every
+block via `renderTreeDoc`, which has no source at hand — fall back to
+deterministic positional ids. Content-hash ids mean identity IS
+content: two byte-identical source blocks share the same id by design
+(the basis for host-side diffing), so hosts needing unique keys must
+disambiguate equal ids by position — e.g. key by
+`(id, occurrenceIndex)`. Wire-schema reference: the Go
 [`render/tree` package docs](https://pkg.go.dev/github.com/sriannamalai/markdownviewer/render/tree).
 
 `version()` returns the version embedded when `mdviewer.wasm` was built.

@@ -79,7 +79,9 @@ export interface Options {
 /**
  * Source position of a node — the same shape (and the same omission
  * rule: absent when the parser recorded no position) as the document
- * codec's spans. Offsets are byte offsets into the markdown source.
+ * codec's spans. Lines are 1-based; offsets are 0-based byte offsets
+ * into the markdown source forming the half-open range
+ * [startOffset, endOffset).
  */
 export interface Span {
   startLine: number;
@@ -388,9 +390,16 @@ export interface Footnote {
  * semantic tree (URL policy, sanitizing, admonition titles, footnote
  * pairing, math/mermaid fallbacks all applied library-side) that hosts
  * render as platform widgets. `blocks` and `footnotes` are always
- * arrays. Block `id`s are content hashes over the block's source bytes
- * (`renderTree`) or deterministic positional fallbacks (`renderTreeDoc`,
- * where no source is at hand).
+ * arrays.
+ *
+ * Block ids: via `renderTree`, blocks with source spans get content
+ * hashes over their source bytes; spanless blocks — and every block
+ * via `renderTreeDoc`, where no source is at hand — fall back to
+ * deterministic positional ids. Content-hash ids mean identity IS
+ * content: two byte-identical source blocks share the same id BY
+ * DESIGN (the basis for host-side diffing), so hosts needing unique
+ * keys must disambiguate equal ids by position — e.g. key by
+ * `(id, occurrenceIndex)`.
  */
 export interface RenderTree {
   version: 1;
