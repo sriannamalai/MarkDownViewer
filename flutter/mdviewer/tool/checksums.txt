@@ -12,3 +12,5 @@
 # artifacts; its checksums land here at release time.
 b594f8a0d90bf089fa65a504b999914a985b6ce6f40ce7e4bf8289271612b499  libmdviewer-0.7.0-ios.xcframework.zip
 6d86b29a920a8057756fc94a68ba4cf47707de17f68640c37c38206ccf80ce3f  libmdviewer-0.7.0-android.zip
+676acedf2122d8c4cc269d0fd7abf779f8031ca85de828fa5d93c8ac16f5258a  libmdviewer-0.8.0-ios.xcframework.zip
+71ac5296742025f64729fdc99449304793b94a98f2e970ff673da2144ca5de75  libmdviewer-0.8.0-android.zip
