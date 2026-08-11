@@ -564,3 +564,192 @@ func TestRenderDocThreadsResolver(t *testing.T) {
 		t.Errorf("RenderDoc did not thread resolver: %s", got)
 	}
 }
+
+const treeSampleMD = "# Tree\n\n```go\npackage main\n```\n"
+
+func TestRenderTreeImpl(t *testing.T) {
+	out, err := RenderTree([]byte(treeSampleMD), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"version":1`, `"kind":"heading"`, `"kind":"codeBlock"`, `"runs":[{`, `"tokenType":`} {
+		if !bytes.Contains(out, []byte(want)) {
+			t.Errorf("tree JSON missing %q in %s", want, out)
+		}
+	}
+}
+
+func TestRenderTreeBadOptionsWrongCase(t *testing.T) {
+	if _, err := RenderTree([]byte(treeSampleMD), []byte(`{"extraCSS": "x"}`), nil); err == nil ||
+		!strings.Contains(err.Error(), "extraCSS") {
+		t.Fatalf("want unknown-field error for wrong-case extraCSS, got %v", err)
+	}
+	if _, err := RenderTreeDoc([]byte(`{}`), []byte(`{"extraCSS": "x"}`), nil); err == nil ||
+		!strings.Contains(err.Error(), "extraCSS") {
+		t.Fatalf("RenderTreeDoc: want unknown-field error for wrong-case extraCSS, got %v", err)
+	}
+}
+
+// RenderTree ignores every HTML-only option — theme, themeOverrides,
+// fragment, maxWidth, sourceMap, stylesheet, extraCss, codeHeader — per
+// the relevance split documented on the options struct.
+func TestRenderTreeIgnoresHTMLOnlyOptions(t *testing.T) {
+	plain, err := RenderTree([]byte(treeSampleMD), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	htmlOnly := []byte(`{"theme": "dark", "themeOverrides": {"--md-bg": "#000"},
+		"fragment": true, "maxWidth": "70ch", "sourceMap": true,
+		"stylesheet": "body{}", "extraCss": ".x{}", "codeHeader": true}`)
+	styled, err := RenderTree([]byte(treeSampleMD), htmlOnly, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(plain, styled) {
+		t.Error("HTML-only options must not affect RenderTree output")
+	}
+}
+
+// The semantic toggles DO flow through: highlighting gates runs,
+// headingAnchors gates anchorId, math off falls back to a code shape.
+func TestRenderTreeAppliesTreeOptions(t *testing.T) {
+	md := []byte("# Tree\n\n```go\npackage main\n```\n\n$$x^2$$\n")
+	out, err := RenderTree(md, []byte(`{"highlighting": false, "headingAnchors": false, "math": false}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(out, []byte(`"runs":null`)) || bytes.Contains(out, []byte(`"runs":[{`)) {
+		t.Errorf("highlighting=false must leave runs null: %s", out)
+	}
+	if bytes.Contains(out, []byte(`"anchorId"`)) {
+		t.Errorf("headingAnchors=false must omit anchorId: %s", out)
+	}
+	if bytes.Contains(out, []byte(`"kind":"mathBlock"`)) {
+		t.Errorf("math=false must fall back from mathBlock: %s", out)
+	}
+}
+
+func TestRenderTreeParserConfig(t *testing.T) {
+	md := []byte("[[Wiki Page]]\n")
+	out, err := RenderTree(md, []byte(`{"parser": {"wikiLinks": false}}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(out, []byte(`"kind":"link"`)) {
+		t.Errorf("parser.wikiLinks=false must render wiki syntax literally: %s", out)
+	}
+}
+
+// RenderTreeDoc decodes-and-ignores the parser object (the document is
+// already parsed), per the RenderDoc precedent.
+func TestRenderTreeDocIgnoresParserConfig(t *testing.T) {
+	doc, err := Parse([]byte("[[Wiki Page]]\n"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := RenderTreeDoc(doc, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withParser, err := RenderTreeDoc(doc, []byte(`{"parser": {"wikiLinks": false}}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(plain, withParser) {
+		t.Error("parser options must not affect RenderTreeDoc output")
+	}
+	if !bytes.Contains(plain, []byte(`"source":"wikiLink"`)) {
+		t.Errorf("doc parsed with default extensions must keep its wiki link: %s", plain)
+	}
+}
+
+func TestRenderTreeThreadsResolver(t *testing.T) {
+	md := []byte("![a](img/x.png)\n\n[b](docs/y.md)\n\n[e](javascript:alert(1))\n")
+	r := func(kind htmlrender.ResolveKind, target string) (string, bool) {
+		if kind == htmlrender.ResolveImage {
+			return "asset://rewritten.png", true
+		}
+		return "", false
+	}
+	out, err := RenderTree(md, nil, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(out, []byte(`"url":"asset://rewritten.png"`)) {
+		t.Errorf("resolved image URL not carried verbatim: %s", out)
+	}
+	if !bytes.Contains(out, []byte(`"url":"docs/y.md"`)) {
+		t.Errorf("declined link did not take default resolution: %s", out)
+	}
+	if !bytes.Contains(out, []byte(`"blocked":true`)) {
+		t.Errorf("declined javascript: link must be blocked by URL policy: %s", out)
+	}
+}
+
+func TestRenderTreeDocThreadsResolver(t *testing.T) {
+	doc, err := Parse([]byte("![a](img/x.png)\n"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := func(kind htmlrender.ResolveKind, target string) (string, bool) {
+		return "asset://rewritten.png", true
+	}
+	out, err := RenderTreeDoc(doc, nil, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(out, []byte(`"url":"asset://rewritten.png"`)) {
+		t.Errorf("RenderTreeDoc did not thread resolver: %s", out)
+	}
+}
+
+// stripTreeIDs removes every "id" field from a decoded tree JSON value,
+// so the source path (content-hash ids) and the doc-JSON path (fallback
+// ids) can be compared structurally.
+func stripTreeIDs(v any) {
+	switch v := v.(type) {
+	case map[string]any:
+		delete(v, "id")
+		for _, c := range v {
+			stripTreeIDs(c)
+		}
+	case []any:
+		for _, c := range v {
+			stripTreeIDs(c)
+		}
+	}
+}
+
+// Parse → RenderTreeDoc equals RenderTree modulo block ids: the doc
+// path has no source bytes, so its ids take the kind+ordinal fallback
+// form while the source path carries content hashes.
+func TestRenderTreeDocMatchesRenderTreeModuloIDs(t *testing.T) {
+	md := []byte("# Tree\n\n```go\npackage main\n```\n\n- [x] done\n\n[[Wiki Page]]\n")
+	direct, err := RenderTree(md, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := Parse(md, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	viaDoc, err := RenderTreeDoc(doc, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(direct, viaDoc) {
+		t.Error("expected ids to differ between source and doc-JSON paths")
+	}
+	var a, b any
+	if err := json.Unmarshal(direct, &a); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(viaDoc, &b); err != nil {
+		t.Fatal(err)
+	}
+	stripTreeIDs(a)
+	stripTreeIDs(b)
+	if !reflect.DeepEqual(a, b) {
+		t.Errorf("trees differ beyond ids:\n%s\nvs\n%s", direct, viaDoc)
+	}
+}

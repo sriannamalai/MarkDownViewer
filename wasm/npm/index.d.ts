@@ -74,6 +74,330 @@ export interface Options {
   resolver?: Resolver;
 }
 
+/* ---- Native render tree (version-1 wire schema) ------------------- */
+
+/**
+ * Source position of a node — the same shape (and the same omission
+ * rule: absent when the parser recorded no position) as the document
+ * codec's spans. Offsets are byte offsets into the markdown source.
+ */
+export interface Span {
+  startLine: number;
+  endLine: number;
+  startOffset: number;
+  endOffset: number;
+}
+
+/** Table column alignment. */
+export type Alignment = 'none' | 'left' | 'center' | 'right';
+
+/**
+ * One syntax-highlight token of a code block: a slice of the code text
+ * tagged with chroma's canonical token-type name (e.g. "Keyword") —
+ * the same names the `highlight-*.json` assets key their colors by.
+ */
+export interface TokenRun {
+  text: string;
+  tokenType: string;
+}
+
+/** Literal text run (emoji shortcodes already substituted). */
+export interface TextInline {
+  kind: 'text';
+  span?: Span;
+  value: string;
+}
+
+/** Intra-paragraph line break rendering as whitespace. Never has a span. */
+export interface SoftBreak {
+  kind: 'softBreak';
+}
+
+/** Explicit line break. Never has a span. */
+export interface HardBreak {
+  kind: 'hardBreak';
+}
+
+export interface Emphasis {
+  kind: 'emphasis';
+  span?: Span;
+  children: Inline[];
+}
+
+export interface Strong {
+  kind: 'strong';
+  span?: Span;
+  children: Inline[];
+}
+
+export interface Strikethrough {
+  kind: 'strikethrough';
+  span?: Span;
+  children: Inline[];
+}
+
+export interface CodeSpan {
+  kind: 'codeSpan';
+  span?: Span;
+  value: string;
+}
+
+/**
+ * Hyperlink with its destination fully resolved: resolver trust,
+ * default resolution, and safe-URL filtering have already run. A
+ * policy-blocked destination has `url: ""` with `blocked: true`
+ * (distinct from an empty-but-allowed destination, where `blocked` is
+ * absent). A wiki link resolves into a Link with `source: "wikiLink"`.
+ */
+export interface Link {
+  kind: 'link';
+  span?: Span;
+  url: string;
+  blocked?: true;
+  title?: string;
+  source?: 'wikiLink';
+  children: Inline[];
+}
+
+/** Image, destination resolved by the same pipeline as Link. */
+export interface Image {
+  kind: 'image';
+  span?: Span;
+  url: string;
+  blocked?: true;
+  alt: string;
+  title?: string;
+}
+
+/**
+ * Inline math for the host's math engine. `display: true` marks a
+ * `$$…$$` span rendering as display math despite sitting inline.
+ */
+export interface MathInline {
+  kind: 'mathInline';
+  span?: Span;
+  source: string;
+  display?: true;
+}
+
+/** Raw inline HTML, sanitized/flagged exactly like HTMLBlock. */
+export interface HTMLInline {
+  kind: 'htmlInline';
+  span?: Span;
+  html: string;
+  unsafe: boolean;
+}
+
+/** Footnote reference site; `index` pairs it with a Footnote. Never has a span. */
+export interface FootnoteRef {
+  kind: 'footnoteRef';
+  index: number;
+}
+
+/** Inline node union, discriminated by `kind`. */
+export type Inline =
+  | TextInline
+  | SoftBreak
+  | HardBreak
+  | Emphasis
+  | Strong
+  | Strikethrough
+  | CodeSpan
+  | Link
+  | Image
+  | MathInline
+  | HTMLInline
+  | FootnoteRef;
+
+export interface Heading {
+  kind: 'heading';
+  span?: Span;
+  id: string;
+  level: number;
+  /** Absent when headingAnchors is off or the document carries none. */
+  anchorId?: string;
+  children: Inline[];
+}
+
+export interface Paragraph {
+  kind: 'paragraph';
+  span?: Span;
+  id: string;
+  children: Inline[];
+}
+
+export interface BlockQuote {
+  kind: 'blockQuote';
+  span?: Span;
+  id: string;
+  blocks: Block[];
+}
+
+/** Callout box; `title` is the derived display title ("Note", …). */
+export interface Admonition {
+  kind: 'admonition';
+  span?: Span;
+  id: string;
+  variant: string;
+  title: string;
+  blocks: Block[];
+}
+
+/**
+ * One list entry. `task` is always present: null for an ordinary item,
+ * the checked state (true/false) for a task-list item.
+ */
+export interface ListItem {
+  span?: Span;
+  id: string;
+  task: boolean | null;
+  blocks: Block[];
+}
+
+export interface List {
+  kind: 'list';
+  span?: Span;
+  id: string;
+  ordered: boolean;
+  /** First item's number; meaningful when `ordered`. */
+  start: number;
+  tight: boolean;
+  items: ListItem[];
+}
+
+/**
+ * Fenced or indented code block. `text` always carries the full
+ * literal source; `runs` is null when highlighting is off or no token
+ * runs are available, otherwise an array whose `text` fields
+ * concatenate to exactly `text`.
+ */
+export interface CodeBlock {
+  kind: 'codeBlock';
+  span?: Span;
+  id: string;
+  language: string;
+  label: string;
+  runs: TokenRun[] | null;
+  text: string;
+}
+
+/** Display math (TeX source, without delimiters). */
+export interface MathBlock {
+  kind: 'mathBlock';
+  span?: Span;
+  id: string;
+  source: string;
+  engine: 'katex';
+}
+
+/** Diagram definition for the host's diagram engine. */
+export interface Diagram {
+  kind: 'diagram';
+  span?: Span;
+  id: string;
+  source: string;
+  engine: 'mermaid';
+}
+
+/** One table cell: its inline content. */
+export type Cell = Inline[];
+
+export interface Table {
+  kind: 'table';
+  span?: Span;
+  id: string;
+  /** One entry per column. */
+  alignments: Alignment[];
+  header: Cell[];
+  rows: Cell[][];
+}
+
+export interface ThematicBreak {
+  kind: 'thematicBreak';
+  span?: Span;
+  id: string;
+}
+
+/**
+ * Raw HTML block. Without allowRawHTML, `html` is the sanitized form
+ * and `unsafe` is false; with it, `html` is the raw source markup and
+ * `unsafe` is true (the content was NOT sanitized).
+ */
+export interface HTMLBlock {
+  kind: 'htmlBlock';
+  span?: Span;
+  id: string;
+  html: string;
+  unsafe: boolean;
+}
+
+export interface DefinitionList {
+  kind: 'definitionList';
+  span?: Span;
+  id: string;
+  /** DefinitionTerm / DefinitionDesc, in source order. */
+  blocks: Block[];
+}
+
+export interface DefinitionTerm {
+  kind: 'definitionTerm';
+  span?: Span;
+  id: string;
+  children: Inline[];
+}
+
+export interface DefinitionDesc {
+  kind: 'definitionDesc';
+  span?: Span;
+  id: string;
+  blocks: Block[];
+}
+
+/** Block node union, discriminated by `kind`. */
+export type Block =
+  | Heading
+  | Paragraph
+  | BlockQuote
+  | Admonition
+  | List
+  | CodeBlock
+  | MathBlock
+  | Diagram
+  | Table
+  | ThematicBreak
+  | HTMLBlock
+  | DefinitionList
+  | DefinitionTerm
+  | DefinitionDesc;
+
+/**
+ * One resolved footnote definition; `index` matches the FootnoteRef
+ * inlines citing it and `count` is the number of such sites.
+ */
+export interface Footnote {
+  kind: 'footnoteDef';
+  span?: Span;
+  id: string;
+  index: number;
+  count: number;
+  blocks: Block[];
+}
+
+/**
+ * The version-1 native render tree: a layout-free, fully RESOLVED
+ * semantic tree (URL policy, sanitizing, admonition titles, footnote
+ * pairing, math/mermaid fallbacks all applied library-side) that hosts
+ * render as platform widgets. `blocks` and `footnotes` are always
+ * arrays. Block `id`s are content hashes over the block's source bytes
+ * (`renderTree`) or deterministic positional fallbacks (`renderTreeDoc`,
+ * where no source is at hand).
+ */
+export interface RenderTree {
+  version: 1;
+  blocks: Block[];
+  footnotes: Footnote[];
+}
+
 export interface Mdviewer {
   /** Library version (injected at build). */
   version(): string;
@@ -83,6 +407,25 @@ export interface Mdviewer {
   parse(md: string, options?: Omit<Options, 'resolver'>): unknown;
   /** Render a version-1 document (object or JSON string) to HTML. */
   renderDoc(doc: unknown, options?: Options): string;
+  /**
+   * Build the version-1 native render tree from markdown. Options:
+   * `parser`, `headingAnchors`, `highlighting`, `math`, `mermaid`, and
+   * `allowRawHTML` apply; the HTML-only fields (`theme`,
+   * `themeOverrides`, `fragment`, `maxWidth`, `sourceMap`,
+   * `stylesheet`, `extraCss`, `codeHeader`) are decoded and ignored —
+   * a native render tree has no HTML page/CSS output to configure, and
+   * spans are always included. Resolver support is identical to
+   * `render` (trees carry resolved URLs).
+   */
+  renderTree(md: string, options?: Options): RenderTree;
+  /**
+   * Build the render tree from a version-1 document (object or JSON
+   * string). Same options relevance as `renderTree`, except `parser`
+   * is also ignored (the document is already parsed, as with
+   * `renderDoc`); block ids take the deterministic positional fallback
+   * form (no markdown source at hand for content hashes).
+   */
+  renderTreeDoc(doc: unknown, options?: Options): RenderTree;
   /** Embedded static asset by registry name (e.g. "mermaid.js", "katex.css", "base.css", "theme-light.css"). */
   asset(name: string): Uint8Array;
 }

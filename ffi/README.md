@@ -12,20 +12,24 @@ language with a C FFI.
 
 ## API
 
-Nine symbols. All functions are thread-safe; this is unchanged by the
-resolver callback — the callback itself runs synchronously on the
+Thirteen symbols. All functions are thread-safe; this is unchanged by
+the resolver callback — the callback itself runs synchronously on the
 calling thread, one call at a time per render (see "Resolver callback"
 below).
 
-    int  mdv_render         (md, md_len, opts_json, &out_html, &out_len, &err);
-    int  mdv_render_r       (md, md_len, opts_json, resolver, userdata, &out_html, &out_len, &err);
-    int  mdv_parse          (md, md_len, opts_json, &out_json, &out_len, &err);
-    int  mdv_render_doc     (doc_json, json_len, opts_json, &out_html, &out_len, &err);
-    int  mdv_render_doc_r   (doc_json, json_len, opts_json, resolver, userdata, &out_html, &out_len, &err);
-    int  mdv_asset          (name, &out, &out_len, &err);   /* embedded assets */
-    void* mdv_alloc         (n);                            /* library-heap allocator */
-    void mdv_free           (ptr);
-    const char* mdv_version (void);   /* static; do not free */
+    int  mdv_render            (md, md_len, opts_json, &out_html, &out_len, &err);
+    int  mdv_render_r          (md, md_len, opts_json, resolver, userdata, &out_html, &out_len, &err);
+    int  mdv_parse             (md, md_len, opts_json, &out_json, &out_len, &err);
+    int  mdv_render_doc        (doc_json, json_len, opts_json, &out_html, &out_len, &err);
+    int  mdv_render_doc_r      (doc_json, json_len, opts_json, resolver, userdata, &out_html, &out_len, &err);
+    int  mdv_render_tree       (md, md_len, opts_json, &out_json, &out_len, &err);
+    int  mdv_render_tree_r     (md, md_len, opts_json, resolver, userdata, &out_json, &out_len, &err);
+    int  mdv_render_tree_doc   (doc_json, json_len, opts_json, &out_json, &out_len, &err);
+    int  mdv_render_tree_doc_r (doc_json, json_len, opts_json, resolver, userdata, &out_json, &out_len, &err);
+    int  mdv_asset             (name, &out, &out_len, &err);   /* embedded assets */
+    void* mdv_alloc            (n);                            /* library-heap allocator */
+    void mdv_free              (ptr);
+    const char* mdv_version    (void);   /* static; do not free */
 
 Return 0 = success. On success the out-buffer is UTF-8 with an uncounted
 trailing NUL; on failure the return is non-zero and `err` holds a message.
@@ -36,9 +40,24 @@ aborts if C `malloc` fails.
 **Every returned buffer must be freed with `mdv_free`** (not plain `free`).
 `mdv_parse` emits a versioned document-AST JSON; feeding it back through
 `mdv_render_doc` lets you parse once and re-render many times (e.g. theme
-switching). `mdv_render_r` and `mdv_render_doc_r` are their plain
-counterparts plus a host resolver callback (below); a NULL `resolver`
-behaves identically to `mdv_render` / `mdv_render_doc`.
+switching). The `_r` variants are their plain counterparts plus a host
+resolver callback (below); a NULL `resolver` behaves identically to the
+plain call.
+
+`mdv_render_tree` renders markdown to the version-1 **native render
+tree** — strict JSON describing a layout-free, fully resolved semantic
+tree (URL policy, raw-HTML sanitizing, admonition titles, footnote
+pairing, math/mermaid fallbacks all applied library-side) that native
+hosts render as platform widgets instead of HTML. The wire schema is
+documented on the Go `render/tree` package
+([pkg.go.dev/github.com/sriannamalai/markdownviewer/render/tree](https://pkg.go.dev/github.com/sriannamalai/markdownviewer/render/tree));
+code blocks carry chroma token runs whose colors the
+`highlight-*.json` assets map (see "Assets"). `mdv_render_tree_doc`
+builds the same tree from `mdv_parse` output — with one difference:
+block `id`s are content hashes over the block's source bytes on the
+markdown path, but the document-JSON path has no source at hand, so its
+ids take a deterministic positional fallback form (stable for a given
+document, not content-stable across edits).
 
 **Compiler note**: the generated `libmdviewer.h` embeds two static
 helper functions from the cgo preamble (`mdv_call_resolver`,
@@ -217,7 +236,21 @@ that base — an omitted key keeps the base's setting, `true` enables,
 `false` disables. So `{"parser": {"wikiLinks": false}}` renders `[[x]]`
 as literal text, and `{"parser": {"commonmarkOnly": true, "tables":
 true}}` is CommonMark plus GFM tables. Parse-time only: it affects
-`mdv_render` and `mdv_parse`; `mdv_render_doc` decodes and ignores it
-(the document it receives is already parsed). Note `parser.math` gates
-`$x$`/`$$…$$` syntax recognition at parse time, while the top-level
-`math` option gates KaTeX rendering of already-parsed math nodes.
+`mdv_render`, `mdv_parse`, and `mdv_render_tree`; `mdv_render_doc` and
+`mdv_render_tree_doc` decode and ignore it (the document they receive
+is already parsed). Note `parser.math` gates `$x$`/`$$…$$` syntax
+recognition at parse time, while the top-level `math` option gates
+KaTeX rendering of already-parsed math nodes.
+
+**Options relevance for the render-tree ops**: `mdv_render_tree*` take
+the same options JSON with the same strict validation, but only the
+semantic fields apply — `parser` (`mdv_render_tree` only, as above),
+`headingAnchors` (anchor-id presence on headings), `highlighting`
+(token-run presence on code blocks), `math`/`mermaid` (off falls back
+to code shapes, mirroring the HTML renderer), and `allowRawHTML` (raw
+vs sanitized HTML nodes, flagged `unsafe`). The HTML-only fields —
+`theme`, `themeOverrides`, `fragment`, `maxWidth`, `sourceMap`,
+`stylesheet`, `extraCss`, `codeHeader` — are decoded and ignored: a
+native render tree has no HTML page or CSS output to configure, and
+node spans are always included in the tree (so `sourceMap` has nothing
+to toggle).

@@ -97,6 +97,22 @@ func main() {
 				return string(b), err
 			})
 		}),
+		// renderTree(mdString, optsJSONString|null, resolverFn|null)
+		// -> version-1 render-tree JSON string
+		"renderTree": js.FuncOf(func(_ js.Value, args []js.Value) any {
+			return result(func() (any, error) {
+				b, err := boundary.RenderTree([]byte(args[0].String()), optsArg(args[1]), jsResolver(args[2]))
+				return string(b), err
+			})
+		}),
+		// renderTreeDoc(docJSONString, optsJSONString|null, resolverFn|null)
+		// -> version-1 render-tree JSON string (fallback block ids)
+		"renderTreeDoc": js.FuncOf(func(_ js.Value, args []js.Value) any {
+			return result(func() (any, error) {
+				b, err := boundary.RenderTreeDoc([]byte(args[0].String()), optsArg(args[1]), jsResolver(args[2]))
+				return string(b), err
+			})
+		}),
 		// asset(name) -> Uint8Array
 		"asset": js.FuncOf(func(_ js.Value, args []js.Value) any {
 			return result(func() (any, error) {

@@ -10,12 +10,20 @@ import (
 
 	markdownviewer "github.com/sriannamalai/markdownviewer"
 	"github.com/sriannamalai/markdownviewer/parser"
+	"github.com/sriannamalai/markdownviewer/render/tree"
 )
 
 // options is the version-1 options JSON accepted by every exported
 // function. Fields irrelevant to an operation (e.g. theme for mdv_parse,
 // or parser for mdv_render_doc, which consumes an already-parsed
-// document) are decoded and ignored by that operation.
+// document) are decoded and ignored by that operation. For the render
+// tree operations the split is: parser (RenderTree only — RenderTreeDoc
+// consumes an already-parsed document, the RenderDoc precedent),
+// headingAnchors, highlighting, math, mermaid, and allowRawHTML apply;
+// the HTML-only fields — theme, themeOverrides, fragment, maxWidth,
+// sourceMap, stylesheet, extraCss, codeHeader — are decoded and ignored
+// there (they configure HTML page/CSS output, which a native render
+// tree has none of; see toTreeOptions).
 type options struct {
 	Version        *int              `json:"version"`
 	Theme          string            `json:"theme"`
@@ -161,6 +169,32 @@ func decodeOptions(data []byte) (options, error) {
 		return options{}, fmt.Errorf("options: unsupported version %d (want 1)", *o.Version)
 	}
 	return o, nil
+}
+
+// toTreeOptions maps the decoded options onto tree.Options for
+// RenderTree/RenderTreeDoc. Only the semantic toggles carry over:
+// headingAnchors (anchorId presence), highlighting (runs presence),
+// math/mermaid (off falls back to code shapes, mirroring the HTML
+// renderer), and allowRawHTML. Everything HTML-only — theme,
+// themeOverrides, fragment, maxWidth, sourceMap, stylesheet, extraCss,
+// codeHeader — is decoded and ignored per the options struct's
+// documented precedent; in particular sourceMap has no tree meaning
+// because spans are ALWAYS included in the tree. The parser object is
+// applied by RenderTree itself at parse time (RenderTreeDoc consumes an
+// already-parsed document). source is the markdown the document was
+// parsed from, used for content-hash block ids; nil (the doc-JSON
+// path) switches every block to the deterministic kind+ordinal
+// fallback id (see "Block identity" in render/tree).
+func (o options) toTreeOptions(resolver markdownviewer.Resolver, source []byte) tree.Options {
+	return tree.Options{
+		Resolver:       resolver,
+		HeadingAnchors: o.HeadingAnchors,
+		Highlighting:   o.Highlighting,
+		Math:           o.Math,
+		Mermaid:        o.Mermaid,
+		AllowRawHTML:   o.AllowRawHTML,
+		Source:         source,
+	}
 }
 
 func (o options) toFacadeOptions(resolver markdownviewer.Resolver) []markdownviewer.Option {

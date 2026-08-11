@@ -235,6 +235,67 @@ func mdv_render_doc_r(docJSON *C.char, jsonLen C.size_t, optsJSON *C.char, resol
 	})
 }
 
+// mdv_render_tree renders markdown (md, md_len) to version-1 native
+// render-tree JSON (the resolved semantic tree native hosts render as
+// platform widgets; see the packaged README for the schema pointer) per
+// the version-1 options JSON. Same conventions as mdv_render. Block ids
+// are content hashes over the markdown source.
+//
+//export mdv_render_tree
+func mdv_render_tree(md *C.char, mdLen C.size_t, optsJSON *C.char, outJSON **C.char, outLen *C.size_t, outErr **C.char) C.int {
+	return call(outJSON, outLen, outErr, func() ([]byte, error) {
+		src, err := goInput(md, mdLen)
+		if err != nil {
+			return nil, err
+		}
+		return boundary.RenderTree(src, goOpts(optsJSON), nil)
+	})
+}
+
+// mdv_render_tree_r is mdv_render_tree plus a host resolver callback.
+// Same conventions as mdv_render_r.
+//
+//export mdv_render_tree_r
+func mdv_render_tree_r(md *C.char, mdLen C.size_t, optsJSON *C.char, resolver C.mdv_resolver_fn, userdata unsafe.Pointer, outJSON **C.char, outLen *C.size_t, outErr **C.char) C.int {
+	return call(outJSON, outLen, outErr, func() ([]byte, error) {
+		src, err := goInput(md, mdLen)
+		if err != nil {
+			return nil, err
+		}
+		return boundary.RenderTree(src, goOpts(optsJSON), cResolver(resolver, userdata))
+	})
+}
+
+// mdv_render_tree_doc builds the render tree from version-1 document
+// JSON (as produced by mdv_parse). Same conventions as mdv_render_tree,
+// except block ids: with no markdown source at hand they take the
+// deterministic kind+ordinal fallback form instead of content hashes.
+//
+//export mdv_render_tree_doc
+func mdv_render_tree_doc(docJSON *C.char, jsonLen C.size_t, optsJSON *C.char, outJSON **C.char, outLen *C.size_t, outErr **C.char) C.int {
+	return call(outJSON, outLen, outErr, func() ([]byte, error) {
+		doc, err := goInput(docJSON, jsonLen)
+		if err != nil {
+			return nil, err
+		}
+		return boundary.RenderTreeDoc(doc, goOpts(optsJSON), nil)
+	})
+}
+
+// mdv_render_tree_doc_r is mdv_render_tree_doc plus a host resolver
+// callback. Same conventions as mdv_render_r.
+//
+//export mdv_render_tree_doc_r
+func mdv_render_tree_doc_r(docJSON *C.char, jsonLen C.size_t, optsJSON *C.char, resolver C.mdv_resolver_fn, userdata unsafe.Pointer, outJSON **C.char, outLen *C.size_t, outErr **C.char) C.int {
+	return call(outJSON, outLen, outErr, func() ([]byte, error) {
+		doc, err := goInput(docJSON, jsonLen)
+		if err != nil {
+			return nil, err
+		}
+		return boundary.RenderTreeDoc(doc, goOpts(optsJSON), cResolver(resolver, userdata))
+	})
+}
+
 // mdv_asset writes a copy of the embedded static asset registered under
 // name (NUL-terminated; e.g. "mermaid.js", "katex.css",
 // "theme-dark.css" — see the packaged README for the full registry)

@@ -53,8 +53,8 @@ check(themeData.version === 1 && themeData.mode === 'light',
   'theme-light.json is version-1 palette data with mode light');
 check(typeof themeData.vars === 'object' && typeof themeData.vars['--md-bg'] === 'string',
   'theme-light.json vars carry the --md-bg token');
-// Highlight color assets (v0.10). renderTree itself lands with the next
-// task's exports; its checks arrive there.
+// Highlight color assets (v0.10); the token runs they color are
+// exercised in the render-tree section below.
 const hlData = JSON.parse(new TextDecoder().decode(mdv.asset('highlight-dark.json')));
 check(hlData.version === 1 && hlData.style === 'github-dark' && typeof hlData.colors === 'object',
   'highlight-dark.json is version-1 color data for the github-dark style');
@@ -153,6 +153,28 @@ throws(() => mdv.render(md, { parser: { wikilinks: false } }), 'parser.wikilinks
 const anchorless = mdv.render('# Hi\n', { fragment: true, headingAnchors: false });
 check(anchorless.includes('<h1>') && !anchorless.includes('id='),
   'headingAnchors=false omits heading id attributes');
+
+// v0.10: native render tree (renderTree / renderTreeDoc).
+const tree = mdv.renderTree('# Tree\n\n```go\npackage main\n```\n');
+check(tree.version === 1 && tree.blocks[0].kind === 'heading' && Array.isArray(tree.footnotes),
+  'renderTree returns a version-1 tree with a heading block');
+const codeBlock = tree.blocks.find((b) => b.kind === 'codeBlock');
+check(codeBlock && Array.isArray(codeBlock.runs) &&
+  codeBlock.runs.some((r) => r.tokenType.startsWith('Keyword')) &&
+  codeBlock.runs.map((r) => r.text).join('') === codeBlock.text,
+  'render tree carries token runs for a go fence, concatenating to the code text');
+// Resolver flows through renderTree: resolved image URL carried
+// verbatim; the declined javascript: link is blocked by URL policy.
+const rtree = mdv.renderTree(`${rmd}\n[evil](javascript:alert(1))\n`, {
+  resolver: (kind, target) => (kind === 1 ? `asset://${target}` : null),
+});
+const rinlines = rtree.blocks.flatMap((b) => b.children ?? []);
+check(rinlines.some((n) => n.kind === 'image' && n.url === 'asset://img/photo.png') &&
+  rinlines.some((n) => n.kind === 'link' && n.url === '' && n.blocked === true),
+  'renderTree carries resolved URL verbatim and flags blocked scheme');
+// Wrong-case option key errors through the tree-doc op too.
+throws(() => mdv.renderTreeDoc(doc, { extraCSS: 'x' }), 'extraCSS',
+  'renderTreeDoc rejects wrong-case option key');
 
 // Corrupt-wasm rejection + retry-after-failure, in a subprocess (the
 // singleton in THIS process already holds a good load).

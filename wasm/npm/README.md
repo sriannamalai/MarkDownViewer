@@ -78,12 +78,31 @@ mdv.version(): string
 mdv.render(md: string, options?: Options): string
 mdv.parse(md: string, options?: Options): unknown        // version-1 document JSON, parsed
 mdv.renderDoc(doc: unknown, options?: Options): string    // doc: object or JSON string
+mdv.renderTree(md: string, options?: Options): RenderTree     // native render tree
+mdv.renderTreeDoc(doc: unknown, options?: Options): RenderTree
 mdv.asset(name: string): Uint8Array
 ```
 
-All four calls throw a plain `Error` on failure (parse errors, decode
+All calls throw a plain `Error` on failure (parse errors, decode
 errors, or an internal panic — the wasm side is always contained, it
 never traps/crashes the module).
+
+`renderTree` / `renderTreeDoc` build the version-1 **native render
+tree**: strict JSON (returned parsed, fully typed in `index.d.ts` as
+`RenderTree`) describing a layout-free, fully resolved semantic tree —
+URL policy, raw-HTML sanitizing, admonition titles, footnote pairing,
+and math/mermaid fallbacks all applied library-side — for hosts that
+render widgets instead of HTML. Resolver support is identical to
+`render`. Only the semantic options apply (`parser` — `renderTree`
+only, `headingAnchors`, `highlighting`, `math`, `mermaid`,
+`allowRawHTML`); the HTML-only fields (`theme`, `themeOverrides`,
+`fragment`, `maxWidth`, `sourceMap`, `stylesheet`, `extraCss`,
+`codeHeader`) are decoded and ignored, and node spans are always
+included. Block `id`s are content hashes over the block's source bytes
+via `renderTree`; `renderTreeDoc` has no source at hand, so its ids
+take a deterministic positional fallback form. Wire-schema reference:
+the Go
+[`render/tree` package docs](https://pkg.go.dev/github.com/sriannamalai/markdownviewer/render/tree).
 
 `version()` returns the version embedded when `mdviewer.wasm` was built.
 When loading the binary from a CDN or a long-lived cache, check it

@@ -171,9 +171,8 @@ int main(void) {
           "theme-light.json is version-1 JSON with mode light");
     mdv_free(asset); asset = NULL;
 
-    /* Highlight color assets (v0.10). Token-run rendering itself
-     * (mdv_render_tree*) lands with the next task's symbols; its
-     * checks arrive there. */
+    /* Highlight color assets (v0.10); the token runs they color are
+     * exercised in the render-tree section below. */
     rc = mdv_asset((char *)"highlight-light.json", &asset, &asset_len, &asset_err);
     CHECK(rc == 0 && asset != NULL && strstr(asset, "\"colors\"") != NULL &&
           strstr(asset, "\"Keyword\"") != NULL,
@@ -378,6 +377,36 @@ int main(void) {
           strstr(xh, "id=") == NULL,
           "headingAnchors=false omits heading id attributes");
     mdv_free(xh); xh = NULL;
+
+    /* ---- v0.10: native render tree (mdv_render_tree*) ---- */
+
+    const char *tree_md = "# Tree\n\n```go\npackage main\n```\n";
+    char *tj = NULL, *te = NULL; size_t tl = 0;
+    rc = mdv_render_tree((char *)tree_md, strlen(tree_md), NULL, &tj, &tl, &te);
+    CHECK(rc == 0 && tj != NULL && strstr(tj, "\"version\":1") != NULL &&
+          strstr(tj, "\"kind\":\"heading\"") != NULL,
+          "mdv_render_tree returns a version-1 tree with a heading block");
+    CHECK(tj != NULL && strstr(tj, "\"kind\":\"codeBlock\"") != NULL &&
+          strstr(tj, "\"runs\":[{") != NULL && strstr(tj, "\"tokenType\":") != NULL,
+          "render tree carries token runs for a go fence");
+    mdv_free(tj); tj = NULL;
+
+    /* Resolver flows through mdv_render_tree_r: resolved image URL is
+     * carried verbatim; the declined javascript: link is blocked by URL
+     * policy (url:"" + blocked:true). */
+    struct resolver_state st8; memset(&st8, 0, sizeof st8); st8.mode = 0;
+    rc = mdv_render_tree_r((char *)rmd, rmd_len, NULL, test_resolver, &st8, &tj, &tl, &te);
+    CHECK(rc == 0 && tj != NULL &&
+          strstr(tj, "\"url\":\"asset://img/photo.png\"") != NULL &&
+          strstr(tj, "\"blocked\":true") != NULL,
+          "mdv_render_tree_r carries resolved URL verbatim and flags blocked scheme");
+    mdv_free(tj); tj = NULL;
+
+    /* Wrong-case option key errors through the tree-doc op too. */
+    rc = mdv_render_tree_doc(doc, doc_len, (char *)"{\"extraCSS\":\"x\"}", &tj, &tl, &te);
+    CHECK(rc != 0 && tj == NULL && te != NULL && strstr(te, "extraCSS") != NULL,
+          "mdv_render_tree_doc rejects wrong-case option key");
+    mdv_free(te); te = NULL;
 
     /* Cleanup: every returned buffer through mdv_free; NULL is a no-op. */
     mdv_free(html); mdv_free(doc); mdv_free(html2); mdv_free(frag);

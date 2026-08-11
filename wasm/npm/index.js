@@ -120,6 +120,15 @@ export function loadMdviewer(wasmSource) {
           const docJSON = typeof doc === 'string' ? doc : JSON.stringify(doc);
           return unwrap(raw.renderDoc(docJSON, json, resolver));
         },
+        renderTree(md, options) {
+          const { json, resolver } = splitOptions(options);
+          return JSON.parse(unwrap(raw.renderTree(String(md), json, resolver)));
+        },
+        renderTreeDoc(doc, options) {
+          const { json, resolver } = splitOptions(options);
+          const docJSON = typeof doc === 'string' ? doc : JSON.stringify(doc);
+          return JSON.parse(unwrap(raw.renderTreeDoc(docJSON, json, resolver)));
+        },
         asset(name) {
           return unwrap(raw.asset(String(name)));
         },

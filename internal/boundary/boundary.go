@@ -16,6 +16,7 @@ import (
 	"github.com/sriannamalai/markdownviewer/assets"
 	"github.com/sriannamalai/markdownviewer/document"
 	htmlrender "github.com/sriannamalai/markdownviewer/render/html"
+	"github.com/sriannamalai/markdownviewer/render/tree"
 	"github.com/sriannamalai/markdownviewer/theme"
 )
 
@@ -65,6 +66,59 @@ func RenderDoc(docJSON, optsJSON []byte, resolver markdownviewer.Resolver) ([]by
 		return nil, err
 	}
 	return markdownviewer.RenderDoc(doc, o.toFacadeOptions(resolver)...)
+}
+
+// RenderTree parses markdown and builds the version-1 native render
+// tree as strict JSON (the render/tree wire schema) per the strict
+// version-1 options JSON; resolver may be nil for default resolution.
+// The nested "parser" options object selects the syntax-extension set,
+// exactly as in Parse; the option→tree mapping (and which HTML-only
+// fields are decoded and ignored) is documented on
+// options.toTreeOptions. Block ids are content hashes over the markdown
+// source (see "Block identity" in the render/tree package docs).
+func RenderTree(md, optsJSON []byte, resolver markdownviewer.Resolver) ([]byte, error) {
+	o, err := decodeOptions(optsJSON)
+	if err != nil {
+		return nil, err
+	}
+	var doc *document.Document
+	if o.Parser != nil {
+		doc, err = markdownviewer.ParseWith(md, o.Parser.toConfig())
+	} else {
+		doc, err = markdownviewer.Parse(md)
+	}
+	if err != nil {
+		return nil, err
+	}
+	t, err := tree.Build(doc, o.toTreeOptions(resolver, md))
+	if err != nil {
+		return nil, err
+	}
+	return t.MarshalJSON()
+}
+
+// RenderTreeDoc builds the version-1 render tree from version-1
+// document JSON (as produced by Parse). Same options semantics as
+// RenderTree, with two doc-path differences: the nested "parser" object
+// is decoded (and validated) but has no effect — the document is
+// already parsed (same precedent as RenderDoc) — and, with no markdown
+// source at hand, block ids take the deterministic kind+ordinal
+// fallback form instead of content hashes (see "Block identity" in the
+// render/tree package docs).
+func RenderTreeDoc(docJSON, optsJSON []byte, resolver markdownviewer.Resolver) ([]byte, error) {
+	o, err := decodeOptions(optsJSON)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := document.UnmarshalJSON(docJSON)
+	if err != nil {
+		return nil, err
+	}
+	t, err := tree.Build(doc, o.toTreeOptions(resolver, nil))
+	if err != nil {
+		return nil, err
+	}
+	return t.MarshalJSON()
 }
 
 // Asset returns an embedded static asset by registry name. The registry
