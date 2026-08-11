@@ -38,18 +38,23 @@ See [`docs/Design.md`](docs/Design.md) for the architecture and roadmap, and
 | Offline output | Every asset (KaTeX, mermaid, fonts) is embedded — rendered HTML has zero external dependencies |
 | Source map | Opt-in `data-md-line` attributes (`WithSourceMap()`) for editor↔preview scroll sync |
 | JSON document tree | `document.MarshalJSON`/`UnmarshalJSON` — versioned wire format with pinned `Kind` names |
+| Native render tree | `render/tree` — a resolved, layout-free semantic tree (version-1 JSON) for widget-native hosts; see "Native rendering" below |
 
 ## Which surface do I use?
 
 One rendering core, five ways in — same output, same options:
 
-| Surface | Artifact | Use when |
-| --- | --- | --- |
-| Go package | `go get github.com/sriannamalai/markdownviewer` | You're writing Go — the richest API (functional options, `document` AST, streaming `RenderTo`) |
-| CLI | `cmd/mdview` (`go install`) | One-off conversions, shell pipelines, editor "open preview" hooks |
-| C ABI | `libmdviewer-<ver>-<os>-<arch>.zip` (release asset) | Any language with a C FFI — desktop apps (Swift, C#, Rust, Python, ...) |
-| WASM | `libmdviewer-<ver>-wasm.zip` (npm-ready ESM) | Browsers and Node — no native binary allowed or wanted |
-| Flutter plugin | `flutter/mdviewer` (path/git dependency) | Flutter mobile apps — typed Dart API over the C ABI, binaries fetched per release |
+| Surface | Artifact | Render tree | Use when |
+| --- | --- | --- | --- |
+| Go package | `go get github.com/sriannamalai/markdownviewer` | `render/tree`'s `tree.Build` | You're writing Go — the richest API (functional options, `document` AST, streaming `RenderTo`) |
+| CLI | `cmd/mdview` (`go install`) | — (HTML only) | One-off conversions, shell pipelines, editor "open preview" hooks |
+| C ABI | `libmdviewer-<ver>-<os>-<arch>.zip` (release asset) | `mdv_render_tree*` | Any language with a C FFI — desktop apps (Swift, C#, Rust, Python, ...) |
+| WASM | `libmdviewer-<ver>-wasm.zip` (npm-ready ESM) | `renderTree`/`renderTreeDoc` | Browsers and Node — no native binary allowed or wanted |
+| Flutter plugin | `flutter/mdviewer` (path/git dependency) | `renderTree` + `MdvDocumentView` widgets | Flutter mobile apps — typed Dart API over the C ABI, binaries fetched per release |
+
+Every surface renders the same sanitized HTML; since v0.10 all but the
+CLI can alternatively produce the **native render tree** for
+widget-native (non-webview) rendering — see "Native rendering" below.
 
 ## Install
 
@@ -324,15 +329,18 @@ defensively and the option no-ops rather than emitting a defanged value.
 
 Every release ships prebuilt C-shared libraries (`libmdviewer`) for macOS
 (arm64/x86_64), Linux (amd64/arm64), and Windows (amd64) — see the
-release's `libmdviewer-*.zip` assets. Nine thread-safe symbols — this is
-unchanged by the resolver callback, which runs synchronously on the
-calling thread: `mdv_render` (Markdown → HTML), `mdv_render_r` (same,
-plus a host `Resolver` callback), `mdv_parse` (Markdown → versioned
-document-AST JSON), `mdv_render_doc` (AST JSON → HTML, for
+release's `libmdviewer-*.zip` assets. Thirteen thread-safe symbols —
+this is unchanged by the resolver callback, which runs synchronously on
+the calling thread: `mdv_render` (Markdown → HTML), `mdv_render_r`
+(same, plus a host `Resolver` callback), `mdv_parse` (Markdown →
+versioned document-AST JSON), `mdv_render_doc` (AST JSON → HTML, for
 parse-once/render-many), `mdv_render_doc_r` (same, plus a `Resolver`
-callback), `mdv_asset` (embedded assets: mermaid/KaTeX bundles,
-theme+highlight CSS), `mdv_alloc` (library-heap allocator, for the
-resolver's returned URL), `mdv_free`, and `mdv_version`. Options cross
+callback), `mdv_render_tree` / `mdv_render_tree_r` /
+`mdv_render_tree_doc` / `mdv_render_tree_doc_r` (Markdown or AST JSON →
+the native render tree, see "Native rendering" below), `mdv_asset`
+(embedded assets: mermaid/KaTeX bundles, theme+highlight CSS, the
+theme/highlight JSON palettes), `mdv_alloc` (library-heap allocator, for
+the resolver's returned URL), `mdv_free`, and `mdv_version`. Options cross
 the boundary as a small JSON object mirroring this package's functional
 options. Fragment-mode hosts can pull the embedded mermaid/KaTeX bundles
 and per-theme highlight CSS over the boundary via `mdv_asset` (v0.5); Go
@@ -364,7 +372,7 @@ no bundler or native dependency required. See
 `./scripts/build-wasm.sh` to build locally.
 
 Flutter/mobile hosts get a plugin, `flutter/mdviewer`, over the same
-nine-symbol C ABI instead of a new binding layer — static on iOS,
+thirteen-symbol C ABI instead of a new binding layer — static on iOS,
 `c-shared` on Android, consumed via `dart:ffi` with `NativeCallable` for
 the `Resolver` callback. Every release also ships the two mobile
 artifacts the plugin's `tool/fetch_binaries.sh` pulls down:
@@ -372,6 +380,75 @@ artifacts the plugin's `tool/fetch_binaries.sh` pulls down:
 `libmdviewer-<version>-android.zip`. See
 [`flutter/mdviewer/README.md`](flutter/mdviewer/README.md) for the Dart
 API, and `./scripts/build-mobile.sh` to build locally.
+
+## Native rendering: the render tree
+
+HTML into a webview is one way to display Markdown; since v0.10 the
+library also renders to a **native render tree** — a layout-free, fully
+*resolved* semantic tree (strict version-1 JSON) that widget-native
+hosts (Flutter, SwiftUI, Compose, ...) walk and render as platform
+widgets, no webview involved. "Resolved" is the point: URL policy and
+resolver rewriting, raw-HTML sanitizing, admonition titles, footnote
+pairing, and math/mermaid fallbacks are all applied library-side —
+through the *same shared code* as the HTML renderer, differential-tested
+for text parity — so a host styles nodes and never re-implements
+policy. Code blocks carry chroma token runs (`[{text, tokenType}]`),
+and the `highlight-light.json` / `highlight-dark.json` assets map token
+types to colors, generated from the same chroma styles as the CSS.
+Every block has a content-hash `id` for host-side diffing (byte-identical
+blocks share an id by design — key by `(id, occurrenceIndex)`).
+
+In Go:
+
+```go
+import "github.com/sriannamalai/markdownviewer/render/tree"
+
+doc, _ := markdownviewer.Parse(src)
+t, err := tree.Build(doc, tree.Options{
+	HeadingAnchors: true,
+	Highlighting:   true,
+	Math:           true,
+	Mermaid:        true,
+	Source:         src, // enables content-hash block ids
+})
+wire, _ := json.Marshal(t) // the version-1 wire JSON
+```
+
+In Flutter, the plugin pairs the typed model with a ready-made widget
+renderer (`MdvDocumentView` — selectable text, token-run code with a
+native copy button, native KaTeX math via `flutter_math_fork`, async
+image resolution, tap callbacks):
+
+```dart
+final tree = Mdviewer.instance.renderTree(markdown);
+
+MdvDocumentView(
+  tree,
+  palette: palette, // MdvPalette.load(dark: ...) or the baked defaults
+  onLinkTap: (url, blocked, source) => openUrl(url),
+  imageProvider: resolveImage, // Future<ImageProvider?> Function(url, alt)
+)
+```
+
+The same trees come out of the C ABI (`mdv_render_tree` /
+`mdv_render_tree_r` / `mdv_render_tree_doc` / `mdv_render_tree_doc_r`)
+and WASM (`renderTree` / `renderTreeDoc`, fully typed in the package's
+`index.d.ts`) — C and WASM output is byte-identical for the same input.
+The `*_doc` variants build the tree from `mdv_parse` document JSON
+(parse-once/render-many); with no source bytes at hand their block ids
+use a deterministic positional fallback instead of content hashes.
+
+**Options relevance:** the tree operations take the same strict options
+JSON as the HTML ones, but only the semantic fields apply (`parser`,
+`headingAnchors`, `highlighting`, `math`, `mermaid`, `allowRawHTML`).
+The HTML-only fields — `theme`, `themeOverrides`, `fragment`,
+`maxWidth`, `sourceMap`, `stylesheet`, `extraCss`, `codeHeader` — are
+decoded and ignored, and spans are always included. See
+`ffi/README.md`'s options-relevance table.
+
+Wire-schema reference: the [`render/tree` package docs](https://pkg.go.dev/github.com/sriannamalai/markdownviewer/render/tree).
+Flutter widget-layer quickstart:
+[`flutter/mdviewer/README.md`](flutter/mdviewer/README.md).
 
 ## Security model
 
@@ -404,10 +481,13 @@ host-integration gaps found embedding the library in real apps
 native-render enabling train: renderer-agnostic resolve policy, split +
 cached syntax highlighting, theme palettes as JSON data, inline source
 spans, parser config across every surface, and the Flutter version
-handshake — clearing the way for the native render-tree renderer design,
-ahead of an eventual v1.0 that commits to API stability. See
-[`docs/Design.md`](docs/Design.md#roadmap) for what remains — a native
-render-tree renderer and incremental rendering if profiling demands it.
+handshake. v0.10 ships what that enabled — the native render tree
+described above, across every surface, plus the Flutter widget layer
+(`MdvDocumentView`) with native math. See
+[`docs/Design.md`](docs/Design.md#roadmap) for what remains ahead of an
+eventual v1.0 that commits to API stability — mobile native-reader
+validation, the mermaid offscreen-SVG fast-follow, the freeze
+discussion itself, and incremental rendering if profiling demands it.
 
 ## License
 

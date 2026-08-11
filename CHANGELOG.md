@@ -7,6 +7,161 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [0.10.0] - 2026-08-12
+
+The native render tree: a second renderer surface next to HTML. One new
+Go package (`render/tree`) builds a layout-free, fully *resolved*
+semantic tree from the same `document.Document` the HTML renderer
+consumes, and every non-Go surface gains matching entry points — four
+new C symbols, WASM `renderTree`/`renderTreeDoc` with full TypeScript
+typings, and a Flutter typed model plus `MdvDocumentView`, a native
+widget renderer (no webview) with KaTeX-quality math built in. All
+additive; existing HTML output is byte-identical to v0.9.0.
+
+### Added
+
+- **`render/tree` package** — `tree.Build(doc, opts)` produces the
+  version-1 render tree: strict JSON
+  (`{"version":1, "blocks":[...], "footnotes":[...]}`) describing a
+  layout-free semantic tree with everything policy-heavy already applied
+  library-side — URL resolution and scheme filtering (a policy-blocked
+  destination is `url:""` + `blocked:true`), raw-HTML sanitizing
+  (bluemonday, the same policy as HTML; `allowRawHTML` carries raw
+  flagged `unsafe:true`), admonition title derivation, footnote
+  reference/definition pairing, wiki-link fallback, and math/mermaid
+  off-fallbacks to code shapes. The derivations are the *same code* the
+  HTML renderer runs (shared `render/internal/derive` helpers + the
+  `resolve` package), differential-tested for text parity against the
+  HTML renderer across the fixture corpus and the CommonMark suite, so
+  the two renderers cannot drift. Kind names reuse the document codec's
+  wire names, and node spans are always included.
+- **Content-hash block ids.** Every block carries an `id` —
+  `hex(sha256(source bytes of its span))[:16]` — stable across edits
+  elsewhere in the document, the basis for host-side diffing and
+  itemized rebuilds. Two caveats, documented on every consumer surface:
+  identity IS content, so two byte-identical source blocks *share* an id
+  by design (hosts needing unique keys must key by
+  `(id, occurrenceIndex)`, never bare id); and blocks with no source
+  bytes at hand — spanless nodes, and everything on the
+  `renderTreeDoc`/document-JSON path — take a deterministic positional
+  fallback id instead (stable for a given document, not content-stable
+  across edits).
+- **Code token runs + highlight color assets.** Code blocks carry
+  `runs: [{text, tokenType}]` from the v0.9 tokenise seam — chroma's
+  canonical `TokenType.String()` names, cached in a bounded runs cache
+  beside the HTML highlight cache — with the invariant that the runs'
+  concatenated text equals the code exactly; `runs` is `null` when
+  highlighting is off or the language is unknown (the `text` field is
+  always present). Two new assets map the token types to colors:
+  `highlight-light.json` / `highlight-dark.json`
+  (`{"version":1, "style":"github"|"github-dark", "colors":
+  {"Keyword":"#cf222e", ...}}`), generated from the same chroma style
+  objects the CSS uses — single source of truth, like `theme-*.json`.
+  Asset registry grows 8 → 10, reachable from every surface via
+  `mdv_asset`/`asset()`.
+- **Four new C symbols** (thirteen total; append-only ABI growth,
+  mirroring the render/render_doc symmetry): `mdv_render_tree`,
+  `mdv_render_tree_r`, `mdv_render_tree_doc`, `mdv_render_tree_doc_r` —
+  markdown (or `mdv_parse` document JSON) to render-tree JSON, same
+  strict options JSON, same resolver callback contract, same panic
+  containment and `mdv_free` ownership as the render family.
+- **WASM `renderTree(md, options)` / `renderTreeDoc(doc, options)`** —
+  the same trees, returned parsed, with the full version-1 wire schema
+  typed in `index.d.ts` (`RenderTree`, per-kind block/inline
+  interfaces). C and WASM tree output is verified byte-identical for
+  the same input.
+- **Flutter typed tree model** (`flutter/mdviewer`):
+  `Mdviewer.instance.renderTree`/`renderTreeDoc` return `MdvTree` — a
+  sealed `MdvBlock`/`MdvInline` hierarchy parsed strictly (a missing
+  required field or wrong type throws a `FormatException` naming the
+  offending path) with exactly one tolerance for forward compatibility:
+  an unknown `kind` decodes as `MdvUnknownBlock`/`MdvUnknownInline`
+  carrying the raw map, never a throw. `renderTreeRaw`/
+  `renderTreeDocRaw` return the raw decoded map for hosts walking the
+  wire JSON themselves.
+- **`MdvDocumentView`** (`flutter/mdviewer`): renders an `MdvTree` as
+  native Flutter widgets — no webview, no bridge. Inlines become
+  selectable `TextSpan` trees (one `SelectionArea` across the document);
+  code blocks render token runs with palette colors, a horizontal
+  scroll, and a **native copy button** (`Clipboard.setData` — no
+  clipboard bridge needed, unlike the webview `codeHeader` path); images
+  resolve through an async host callback
+  (`Future<ImageProvider?>` — native mode lifts the sync-resolver
+  constraint; declined/blocked images render an alt-text placeholder);
+  links and wiki-links fire a tap callback (blocked links render muted
+  and inert); tables, lists (checkboxes read-only), blockquotes,
+  admonitions, thematic breaks, definition lists, and a trailing
+  footnotes section round out the block kinds. Colors come from
+  `MdvPalette` — baked light/dark defaults, or `MdvPalette.load()`
+  fetching `theme-*.json` + `highlight-*.json` through the plugin's
+  `asset()`, every color host-overridable. Every block kind is
+  overridable via `MdvBuilders` (the default child is passed in, so
+  overrides can decorate rather than reimplement). Blocks are keyed by
+  `(id, occurrenceIndex)` with a `findChildIndexCallback`, so unchanged
+  blocks keep widget state across re-parses.
+- **Native math by default** via
+  [`flutter_math_fork`](https://pub.dev/packages/flutter_math_fork)
+  (Apache-2.0; KaTeX layout in Dart, bundled fonts) — inline and block
+  TeX render as real widgets with no webview. TeX that
+  `flutter_math_fork` cannot lay out falls back to styled source text,
+  never a crash; coverage is broad but not identical to browser KaTeX,
+  and the builder is overridable for hosts that need more.
+- **Mermaid: pluggable builder, placeholder default.** The default
+  `diagram` rendering is a bordered box — engine label + mono source —
+  never a live rendering; hosts plug a real renderer via
+  `MdvBuilders.diagram`. An offscreen-webview→SVG mermaid service is an
+  explicit post-v0.10 fast-follow, prototyped in the MDViewer.Mobile
+  app first.
+- **HTML is never live in the widget layer.** The default `htmlBlock`
+  rendering shows a sanitized block's tag-stripped plain text, and an
+  unsafe (raw) block as a collapsed "Raw HTML" disclosure with the mono
+  source — `MdvDocumentView` never interprets HTML markup, regardless
+  of `allowRawHTML`. Hosts that want live HTML islands supply an
+  `MdvBuilders.htmlBlock` override and own that risk.
+- **Example app native page**: the example gains a "Native" tab
+  rendering the same sample document through
+  `renderTree` + `MdvDocumentView` side-by-side with the webview page,
+  validated end-to-end on the iOS simulator and Android emulator.
+
+### Changed
+
+- **Options relevance for the tree operations** (documented per
+  surface): the render-tree calls take the same strict options JSON,
+  but only the semantic fields apply — `parser` (markdown-input calls
+  only), `headingAnchors`, `highlighting`, `math`, `mermaid`,
+  `allowRawHTML`. The HTML-only fields (`theme`, `themeOverrides`,
+  `fragment`, `maxWidth`, `sourceMap`, `stylesheet`, `extraCss`,
+  `codeHeader`) are decoded and ignored — a render tree has no page or
+  CSS output to configure — and spans are always included, so
+  `sourceMap` has nothing to toggle.
+- Docs: a "Native rendering" section in the root README (with the
+  surface table gaining the tree operations), a render-tree
+  architecture section and updated roadmap in `docs/Design.md`, the
+  options-relevance table and `highlight-*.json` schema in
+  `ffi/README.md`, tree typings and id semantics in the wasm README,
+  and an `MdvDocumentView` quickstart in the plugin README.
+- Test growth across the surfaces: the C harness now runs 65 checks,
+  the Node harness 48, and the Flutter plugin suite 150 tests
+  (typed-model parsing per kind, widget tests per block kind, math
+  rendering + fallback, copy button, duplicate-id state survival),
+  plus Go-side golden tree tests and a differential text-parity
+  harness vs the HTML renderer. CommonMark stays 652/652.
+
+### Known limitations (v0.10)
+
+- **Footnote references are superscript-only — no jump-to-definition.**
+  Definitions render in the trailing footnotes section, and refs render
+  as superscripts, but tapping a ref does not scroll to its definition:
+  that needs scroll-to-index control the plain `ListView.builder` does
+  not offer, and the spec's `controller?` parameter is deliberately not
+  shipped in v1. Revisited with the Mobile native-reader train.
+- **CRLF code fences lose native highlighting** (fail-closed): chroma
+  lexers that rewrite line endings would produce runs whose text
+  differs from the source, so `TokenRuns` declines and the tree carries
+  `runs: null` — the code still renders as plain text. (The HTML path
+  still highlights CRLF fences; it displays chroma's LF-normalized
+  output, while the tree's `text` keeps the CRLF source bytes.)
+
 ## [0.9.0] - 2026-08-11
 
 The native-render enabling train: clears the collisions a native

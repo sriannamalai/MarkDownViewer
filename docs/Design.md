@@ -17,15 +17,18 @@ below for what's expected to change before v1.0.
   Markdown bytes ──▶│   parser    │──▶ document.Document ──┐
                     │  (goldmark) │      (typed AST)        │
                     └─────────────┘                         │
-                                                              ▼
-                                                     ┌────────────────┐
-                                                     │  render/html   │──▶ HTML
-                                                     │ (+ theme, +    │
-                                                     │  assets)       │
-                                                     └────────────────┘
+                                             ┌──────────────┴───────────────┐
+                                             ▼                              ▼
+                                    ┌────────────────┐            ┌────────────────┐
+                                    │  render/html   │──▶ HTML    │  render/tree   │──▶ render tree
+                                    │ (+ theme, +    │            │ (shared derive │      (JSON)
+                                    │  assets)       │            │  + resolve)    │
+                                    └────────────────┘            └────────────────┘
 ```
 
-Two stages, one boundary in between:
+Two stages, one boundary in between (shown here with both renderers —
+the HTML renderer described next, and the v0.10 native render tree
+covered in its own section below):
 
 1. **`parser`** turns Markdown source into a `document.Document`. It wraps
    [goldmark](https://github.com/yuin/goldmark) (CommonMark) plus goldmark
@@ -52,6 +55,8 @@ Two stages, one boundary in between:
 | `document` | The AST: `Node` interface, concrete node types (`Heading`, `List`, `Link`, …), `Walk`, `PlainText`, `Dump` (debug printer). Zero non-stdlib imports. |
 | `parser` | Markdown → `document.Document`. Wraps goldmark; owns the goldmark→document tree transform, heading-slug generation, and the math/admonition extensions. `Config` toggles individual syntax extensions. |
 | `render/html` | `document.Document` → HTML. Sanitization (bluemonday), URL policy, page assembly, chroma syntax highlighting, resolver hook. |
+| `render/tree` | `document.Document` → the version-1 native render tree (`tree.Build`): a layout-free, fully resolved semantic tree as strict JSON, for hosts that render platform widgets instead of HTML. |
+| `resolve` | Renderer-agnostic resolution policy: `Resolver`, the ABI-frozen `ResolveKind` ints, the safe-URL scheme allowlist, and the wiki-link default resolution — consumed by both renderers. |
 | `theme` | CSS custom-property theme definitions (`light`, `dark`) layered over a shared base stylesheet. |
 | `assets` | Embedded, offline copies of KaTeX and mermaid (JS/CSS), inlined at build time. Exported for fragment hosts to inject. |
 | `cmd/mdview` | CLI: reads a file or stdin, calls the facade, writes HTML. |
@@ -224,12 +229,79 @@ below for what a resolver is and isn't responsible for; that contract is
 unchanged by which boundary it crosses.
 
 v0.7's mobile artifacts (`flutter/mdviewer`, `scripts/build-mobile.sh`)
-consume this same nine-symbol ABI unchanged — static (`c-archive`) on
-iOS, `c-shared` on Android, exactly the shape `ffi/` already produces for
-desktop hosts. The Flutter plugin talks to it over `dart:ffi`, with a
-per-call `NativeCallable.isolateLocal` bridging the `Resolver` callback
-the same way the C ABI defines it; no new binding layer or boundary
-crossing was needed on the Go side.
+consume this same ABI unchanged (nine symbols at the time) — static
+(`c-archive`) on iOS, `c-shared` on Android, exactly the shape `ffi/`
+already produces for desktop hosts. The Flutter plugin talks to it over
+`dart:ffi`, with a per-call `NativeCallable.isolateLocal` bridging the
+`Resolver` callback the same way the C ABI defines it; no new binding
+layer or boundary crossing was needed on the Go side.
+
+v0.10 grows the ABI to thirteen symbols with the four render-tree entry
+points (`mdv_render_tree`, `mdv_render_tree_r`, `mdv_render_tree_doc`,
+`mdv_render_tree_doc_r`), riding the same `internal/boundary` dispatch,
+options decoding, resolver bridging, and panic containment as the
+render family — see "The native render tree" below.
+
+## The native render tree (`render/tree`, v0.10)
+
+`render/tree` is the second renderer over the `document` model — the
+layering rule's payoff made concrete — and the third form of rendered
+output after full-page and fragment HTML. `tree.Build(doc, opts)` walks
+the same `document.Document` the HTML renderer consumes and produces a
+`*tree.Tree` whose `MarshalJSON` emits the strict version-1 wire schema
+(`{"version":1, "blocks":[...], "footnotes":[...]}`): a layout-free
+semantic tree for toolkit-native hosts (Flutter, SwiftUI, Compose, …)
+that render platform widgets instead of loading HTML into a webview.
+
+The design center is **resolved semantics**: everything policy-heavy
+happens library-side, once, before the tree crosses any boundary — URL
+resolution and scheme filtering (a blocked destination is `url:""` +
+`blocked:true`), raw-HTML sanitizing through the same bluemonday policy
+the HTML renderer uses, admonition title derivation, footnote
+reference/definition pairing, wiki-link fallback, and the math/mermaid
+off-fallbacks to code shapes. A host walks the tree and styles nodes;
+it never re-implements policy.
+
+Three properties keep the two renderers honest with each other:
+
+- **Shared derivations, not copied ones.** The admonition-title,
+  footnote-pairing, wiki-fallback, and URL-policy logic lives in shared
+  helpers (`render/internal/derive`, the `resolve` package) that *both*
+  renderers call — extracted, byte-identity-proven for HTML, rather than
+  duplicated. Differential tests then pin text parity: the tree's plain
+  text equals the HTML renderer's text content across the fixture corpus
+  and the CommonMark suite.
+- **One naming universe.** Tree kind names are exactly the document
+  codec's wire names (`document.Kind.String()`), so a kind in the doc
+  JSON and the same kind in the render tree spell identically.
+- **Highlighting as data, from the same source.** Code blocks carry
+  chroma token runs (the v0.9 tokenise seam, now exported as
+  `htmlrender.TokenRuns`, with its own bounded cache) whose
+  concatenated text equals the code exactly; the
+  `highlight-light.json`/`highlight-dark.json` assets map the token
+  types to colors, generated from the same chroma style objects the CSS
+  uses — the CSS and the data cannot drift.
+
+Block identity is a content hash — `hex(sha256(block source bytes))[:16]`
+— so ids are stable across edits elsewhere in the document (the basis
+for host-side diffing and itemized rebuilds). The corollary is
+documented on every surface: byte-identical blocks *share* an id by
+design, so hosts key by `(id, occurrenceIndex)`; and blocks with no
+source at hand (spanless nodes, the whole document-JSON path) take a
+deterministic positional fallback id.
+
+The tree rides the existing boundary machinery unchanged:
+`internal/boundary` grows RenderTree/RenderTreeDoc operations, the C ABI
+four symbols (`mdv_render_tree*`, thirteen total), WASM
+`renderTree`/`renderTreeDoc` (typed in `index.d.ts`), and the Flutter
+plugin a strict typed model (`MdvTree`, sealed `MdvBlock`/`MdvInline`)
+plus `MdvDocumentView` — the in-repo proof that the tree is actually
+renderable as native widgets, with native math (`flutter_math_fork`),
+token-run code with a native copy button, and a never-live default for
+HTML nodes. Only the semantic options apply to tree operations; the
+HTML-only fields are decoded and ignored (documented per surface), and
+spans are always included. C and WASM tree output is verified
+byte-identical for the same input.
 
 ## Feature set
 
@@ -394,18 +466,41 @@ highlight cache behind it, the theme palettes as version-1 JSON assets
 recover colors), inline-level source spans on the document model
 (emphasis, links, code spans, math, ... — what selection mapping needs),
 `parser.Config` and heading-anchor control across every surface's
-options JSON, and a Flutter plugin↔library version handshake. The next
-step is the native render-tree renderer design itself.
+options JSON, and a Flutter plugin↔library version handshake — clearing
+the way for the render tree itself.
+
+v0.10 shipped the native render tree — the second renderer the layering
+rule always promised: the `render/tree` package building the version-1
+resolved semantic tree from the same `document.Document`, shared
+derivations with the HTML renderer (differential-tested for text
+parity), token runs + `highlight-*.json` color assets, four new C
+symbols (thirteen total), WASM `renderTree`/`renderTreeDoc` with typed
+d.ts, and the Flutter typed model + `MdvDocumentView` native widget
+renderer with native math (`flutter_math_fork`) — validated by the
+example app's Native page on both mobile platforms. See "The native
+render tree" section above. Known v0.10 limits: footnote refs are
+superscript-only (no jump-to-definition — needs scroll-controller work),
+and mermaid renders as a pluggable placeholder.
 
 Toward v1.0, what remains, roughly in order:
 
-1. **A native render-tree renderer** — for toolkit-native (non-webview)
-   hosts, rendering directly from `document.Document` instead of through
-   HTML.
-2. **Incremental rendering**, if profiling on real host workloads shows
+1. **Mobile native reader validation** — the MDViewer.Mobile app grows a
+   native reader mode against released v0.10.0 artifacts, the same
+   app-validates-library pattern that hardened the v0.7 plugin. Expected
+   to feed back small tree/widget gaps (footnote jump-to-definition via
+   a scroll controller among them).
+2. **Mermaid offscreen-SVG fast-follow** — an offscreen-webview→SVG
+   service so diagrams render natively-embeddable SVG instead of the
+   placeholder; prototyped in the Mobile app first, then folded back as
+   the plugin's default diagram builder if it earns it.
+3. **The 1.0-freeze discussion** — the `document` model, options JSON,
+   C ABI, and now the tree schema have all been shaped by real hosts;
+   deciding what freezes (and what stays explicitly unfrozen) is its own
+   train.
+4. **Incremental rendering**, if profiling on real host workloads shows
    full re-render (even with parse-once/`RenderDoc`) is the bottleneck —
    not committed to; only worth doing if the numbers demand it.
 
 Every step above consumes (and, where relevant, extends) the same
-`document` model the HTML renderer uses today; none requires rearchitecting
+`document` model both renderers use today; none requires rearchitecting
 the parsing layer.

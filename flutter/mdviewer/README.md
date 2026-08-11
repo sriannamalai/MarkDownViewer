@@ -3,15 +3,22 @@
 A Flutter FFI plugin for [MarkDownViewer](https://github.com/sriannamalai/markdownviewer):
 sanitized, self-contained HTML rendering — mermaid diagrams, TeX math
 (KaTeX), and syntax highlighting for 250+ languages — fully offline. The
-Dart API is a thin, typed `dart:ffi` layer over the same nine-symbol C ABI
-(`ffi/README.md` in the monorepo) that every other MarkDownViewer host
-binds; nothing here reimplements rendering.
+Dart API is a thin, typed `dart:ffi` layer over the same thirteen-symbol
+C ABI (`ffi/README.md` in the monorepo) that every other MarkDownViewer
+host binds; nothing here reimplements parsing or policy.
 
-Display the result in a webview (`webview_flutter` or similar) — this
-plugin returns HTML strings, it does not paint widgets itself. See
-[`example/`](example/) for a complete app: mermaid + KaTeX + a
-syntax-highlighted code fence + a resolver-rewritten image + a wiki-link,
-themed, in a `WebViewWidget`.
+Two ways to display a document:
+
+- **HTML in a webview** (`render`/`renderDoc` + `webview_flutter` or
+  similar) — full fidelity including live mermaid diagrams.
+- **Native widgets** (`renderTree` + [`MdvDocumentView`](#native-widget-rendering-mdvdocumentview),
+  since v0.10) — no webview, no bridge: selectable text, token-run
+  syntax highlighting, native KaTeX math, a native copy button.
+
+See [`example/`](example/) for a complete app with both paths side by
+side: a "Web" page rendering mermaid + KaTeX + highlighted code + a
+resolver-rewritten image + a wiki-link in a `WebViewWidget`, and a
+"Native" page rendering the same document through `MdvDocumentView`.
 
 ## Status
 
@@ -164,6 +171,112 @@ only), `headingAnchors`, `highlighting`, `math`, `mermaid`, and
 `fragment`, `maxWidth`, `sourceMap`, `stylesheet`, `extraCss`,
 `codeHeader`) are decoded and ignored, and spans are always included —
 see `ffi/README.md`'s options-relevance table.
+
+## Native widget rendering: MdvDocumentView
+
+`MdvDocumentView` renders an `MdvTree` as native Flutter widgets — a
+lazy `ListView` of the tree's blocks, no webview, no bridge:
+
+```dart
+class ReaderPage extends StatelessWidget {
+  const ReaderPage({super.key, required this.tree, required this.palette});
+
+  final MdvTree tree;      // Mdviewer.instance.renderTree(markdown)
+  final MdvPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return MdvDocumentView(
+      tree,
+      palette: palette,
+      onLinkTap: (url, blocked, source) => openUrl(url),
+      imageProvider: _resolveImage, // see the stable-callback note below
+    );
+  }
+}
+
+Future<ImageProvider?> _resolveImage(String url, String alt) async {
+  final bytes = await vault.imageBytes(url); // your async I/O
+  return bytes == null ? null : MemoryImage(bytes);
+}
+```
+
+What the defaults give you: selectable text across the whole document
+(one `SelectionArea`), token-run syntax-highlighted code with a
+horizontal scroll and a **native copy button** (`Clipboard.setData` —
+no clipboard bridge, unlike the webview `codeHeader` path), native
+KaTeX math via `flutter_math_fork`, tables, lists with read-only
+checkboxes, blockquotes, colored admonitions, definition lists, and a
+trailing footnotes section. Blocks are keyed by `(id, occurrenceIndex)`
+internally, so unchanged blocks keep their widget state (e.g. a code
+pane's scroll position) across re-parses of an edited document.
+
+### Palette
+
+Colors come from `MdvPalette`. `null` picks the baked-in
+`MdvPalette.light`/`MdvPalette.dark` by the ambient `Theme`'s
+brightness — correct base colors, but **no syntax-token colors**. Load
+the full asset-backed palette once at startup for highlighted code:
+
+```dart
+final palette = await MdvPalette.load(dark: true);
+// theme-dark.json + highlight-dark.json via Mdviewer.asset(), parsed —
+// the same palettes the HTML renderer's CSS uses. Every color is
+// host-overridable: palette.copyWith(background: myBg).
+```
+
+### Overriding block rendering
+
+Every block kind is overridable via `MdvBuilders`; the built-in child
+is constructed and passed in, so an override can decorate rather than
+reimplement:
+
+```dart
+MdvDocumentView(
+  tree,
+  builders: MdvBuilders(
+    // Wrap every code block in a card:
+    codeBlock: (context, node, defaultChild) =>
+        Card(clipBehavior: Clip.antiAlias, child: defaultChild),
+    // Replace the mermaid placeholder with your own renderer:
+    diagram: (context, node, defaultChild) => MyMermaidView(node.source),
+  ),
+)
+```
+
+Two builders exist specifically as host hooks:
+
+- **`diagram`** — mermaid is deliberately *not* rendered natively in
+  v0.10: the default is a bordered placeholder (engine label + mono
+  source). An offscreen-webview→SVG service is the planned fast-follow;
+  until then, hosts wanting live diagrams plug their own builder.
+- **`htmlBlock`** — the default **never renders live HTML**: a
+  sanitized block shows its tag-stripped plain text, an unsafe (raw)
+  block a collapsed "Raw HTML" disclosure with the mono source,
+  regardless of `allowRawHTML`. A host that wants live HTML islands
+  overrides this builder and owns that risk.
+
+### Notes and limitations
+
+- **Pass a stable `imageProvider` callback** (a top-level function,
+  static method, or a field held across builds) — each image resolves
+  once and re-resolves only when its url or the callback's *function
+  identity* changes, so an inline closure (a new identity every
+  `build()`) defeats the memoization and re-fires your resolver on
+  every rebuild.
+- **Footnote refs are superscript-only in v0.10** — definitions render
+  in the trailing footnotes section, but tapping a reference does not
+  jump to its definition (needs scroll-to-index control the plain
+  `ListView.builder` doesn't offer; planned alongside the Mobile
+  native-reader work).
+- **Math coverage** — `flutter_math_fork` covers most of KaTeX but not
+  all of it; TeX it cannot lay out falls back to styled source text
+  (never a crash). Hosts needing full parity override
+  `MdvBuilders.mathBlock` (the webview path remains the full-fidelity
+  option).
+- **An image inside a link is not tappable** — recognizers attach to
+  text spans only, and image `WidgetSpan`s are deliberately skipped;
+  the surrounding link text still responds.
 
 ## Options
 
@@ -407,7 +520,8 @@ render with the map-backed sync resolver.
 ## See also
 
 - [`example/`](example/) — a runnable Flutter app exercising every call
-  and the resolver, themed, in a webview.
+  and the resolver: the same sample document on a webview page and a
+  native `MdvDocumentView` page, light/dark switchable.
 - `ffi/README.md` (monorepo root) — the C ABI reference this plugin binds:
   full options table, resolver callback C signature, memory ownership,
   and the asset registry.
