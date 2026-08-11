@@ -6,10 +6,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/yuin/goldmark/util"
-
 	"github.com/sriannamalai/markdownviewer/document"
-	"github.com/sriannamalai/markdownviewer/resolve"
+	"github.com/sriannamalai/markdownviewer/render/internal/derive"
 )
 
 // Render writes doc to w as HTML per opts, either a full page (the default)
@@ -87,35 +85,17 @@ func esc(s string) string {
 // example 200) — the former omits the attribute entirely, the latter emits
 // `href=""`. Callers must not conflate the two by testing the string alone.
 //
-// A Resolver's ok=true result is trusted per its documented contract
-// (Options.Resolver): the host controls resolution, so its URL is emitted
-// as-is, bypassing the resolve.SafeURL scheme allowlist. Everything else —
-// no Resolver installed, or the Resolver declined with ok=false — takes
-// the default resolution path (resolve.DefaultResolution: wikilink targets
-// get ".md" appended; other destinations pass through unchanged) and is
-// filtered by resolve.SafeURL exactly as before. Both policies live in the
-// renderer-agnostic resolve package so every renderer shares them.
+// The resolution pipeline itself — Resolver trust (an ok=true URL is
+// emitted as-is, bypassing the resolve.SafeURL scheme allowlist), the
+// resolve.DefaultResolution fallback (wikilink ".md" append), the
+// SafeURL filter, and the CommonMark-matching percent-encoding of
+// non-wikilink destinations (see TestWikiLinkDefaultResolution) — is
+// derive.Href, shared with every other renderer; this wrapper only adds
+// the HTML attribute escaping.
 func (r *writer) href(kind ResolveKind, dest string) (string, bool) {
-	if r.opts.Resolver != nil {
-		if u, ok := r.opts.Resolver(kind, dest); ok {
-			return esc(u), true
-		}
-	}
-	u := resolve.DefaultResolution(kind, dest)
-	if !r.opts.Unsafe && !resolve.SafeURL(u) {
+	u, ok := derive.Href(r.opts.Resolver, r.opts.Unsafe, kind, dest)
+	if !ok {
 		return "", false
-	}
-	if kind != ResolveWikiLink {
-		// Percent-encode the destination to match the CommonMark reference
-		// HTML output. Wikilink targets are excluded: they're a filesystem
-		// path resolved by the host, not a URI, and encoding would corrupt
-		// e.g. spaces in page names (see TestWikiLinkDefaultResolution).
-		// Backslash-escapes and entity references in ordinary link/image
-		// destinations are already decoded by the parser (transform.go); for
-		// autolinks — where CommonMark forbids that decoding — the raw text
-		// flows through untouched, so this call only ever adds percent-
-		// encoding, never a second decode pass.
-		u = string(util.URLEscape([]byte(u), false))
 	}
 	return esc(u), true
 }
@@ -146,15 +126,12 @@ func (r *writer) block(n document.Node, tight bool) {
 		r.blocks(n, false)
 		r.raw("</blockquote>\n")
 	case *document.Admonition:
-		variant := n.Variant
-		if variant == "" {
-			variant = "note"
-		}
-		// Title-case first, then escape: the parser constrains variants,
-		// but hand-built documents and doc JSON via RenderDoc can carry
-		// arbitrary bytes here, so both attribute and title positions must
-		// be escaped.
-		title := strings.ToUpper(variant[:1]) + variant[1:]
+		// Variant default and title derivation are shared with the render
+		// tree (derive.AdmonitionTitle). Derive first, then escape: the
+		// parser constrains variants, but hand-built documents and doc JSON
+		// via RenderDoc can carry arbitrary bytes here, so both attribute
+		// and title positions must be escaped.
+		variant, title := derive.AdmonitionTitle(n.Variant)
 		r.raw(`<div` + attr + ` class="admonition admonition-` + esc(variant) + "\">\n")
 		r.raw(`<p class="admonition-title">` + esc(title) + "</p>\n")
 		r.blocks(n, false)
@@ -345,10 +322,7 @@ func (r *writer) codeBlock(n *document.CodeBlock, attr string) {
 		// CSS's job) + copy button. Both emit paths below sit inside the
 		// wrapper; data-md-line stays on the block element it is on
 		// today — the wrapper carries no attributes.
-		lang := n.Language
-		if lang == "" {
-			lang = "code"
-		}
+		lang := derive.CodeLabel(n.Language)
 		r.raw(`<div class="md-code"><div class="md-code-header"><span class="md-code-lang">` +
 			esc(lang) + `</span><button type="button" class="md-code-copy">Copy</button></div>`)
 		defer r.raw("</div>\n")
@@ -431,7 +405,12 @@ func (r *writer) footnotes(doc *document.Document) {
 		return
 	}
 	r.raw("<section class=\"footnotes\">\n<ol>\n")
-	for _, def := range doc.Footnotes {
+	// Pairing/order come from the shared derivation (derive.Footnotes):
+	// definitions in first-reference order, anchors keyed on the shared
+	// def/ref Index. The HTML shape emits one backref per definition, so
+	// the pair's RefCount is not consumed here.
+	for _, fn := range derive.Footnotes(doc) {
+		def := fn.Def
 		attr := ""
 		if r.opts.SourceMap {
 			if s := def.Span(); !s.IsZero() {
@@ -515,13 +494,14 @@ func (r *writer) inline(n document.Node) {
 	}
 }
 
-// rawHTML sanitizes raw markdown HTML with bluemonday's UGC policy by
-// default, stripping scripts, event handlers, and other XSS vectors.
-// Unsafe mode passes it through verbatim.
+// rawHTML sanitizes raw markdown HTML with the shared bluemonday UGC
+// policy (derive.SanitizeHTML) by default, stripping scripts, event
+// handlers, and other XSS vectors. Unsafe mode passes it through
+// verbatim.
 func (r *writer) rawHTML(s string, block bool) {
 	out := s
 	if !r.opts.Unsafe {
-		out = sanitizePolicy.Sanitize(s)
+		out = derive.SanitizeHTML(s)
 	}
 	r.raw(out)
 	if block && !strings.HasSuffix(out, "\n") {

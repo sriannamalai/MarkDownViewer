@@ -1,0 +1,732 @@
+{
+  "version": 1,
+  "blocks": [
+    {
+      "kind": "heading",
+      "span": {
+        "startLine": 1,
+        "endLine": 1,
+        "startOffset": 0,
+        "endOffset": 16
+      },
+      "id": "e53d4929599e4185",
+      "level": 1,
+      "anchorId": "policy-fixture",
+      "children": [
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 1,
+            "endLine": 1,
+            "startOffset": 2,
+            "endOffset": 16
+          },
+          "value": "Policy fixture"
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "span": {
+        "startLine": 3,
+        "endLine": 4,
+        "startOffset": 18,
+        "endOffset": 128
+      },
+      "id": "02d7d1ba217e7b83",
+      "children": [
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 3,
+            "endLine": 3,
+            "startOffset": 18,
+            "endOffset": 32
+          },
+          "value": "A [safe link]("
+        },
+        {
+          "kind": "link",
+          "url": "https://example.com/a",
+          "children": [
+            {
+              "kind": "text",
+              "value": "https://example.com/a"
+            }
+          ]
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 3,
+            "endLine": 3,
+            "startOffset": 53,
+            "endOffset": 69
+          },
+          "value": " b \"Safe\") and a"
+        },
+        {
+          "kind": "softBreak"
+        },
+        {
+          "kind": "link",
+          "span": {
+            "startLine": 4,
+            "endLine": 4,
+            "startOffset": 71,
+            "endOffset": 83
+          },
+          "url": "",
+          "blocked": true,
+          "children": [
+            {
+              "kind": "text",
+              "span": {
+                "startLine": 4,
+                "endLine": 4,
+                "startOffset": 71,
+                "endOffset": 83
+              },
+              "value": "blocked link"
+            }
+          ]
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 4,
+            "endLine": 4,
+            "startOffset": 105,
+            "endOffset": 113
+          },
+          "value": " and an "
+        },
+        {
+          "kind": "link",
+          "span": {
+            "startLine": 4,
+            "endLine": 4,
+            "startOffset": 114,
+            "endOffset": 124
+          },
+          "url": "",
+          "children": [
+            {
+              "kind": "text",
+              "span": {
+                "startLine": 4,
+                "endLine": 4,
+                "startOffset": 114,
+                "endOffset": 124
+              },
+              "value": "empty link"
+            }
+          ]
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 4,
+            "endLine": 4,
+            "startOffset": 127,
+            "endOffset": 128
+          },
+          "value": "."
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "span": {
+        "startLine": 6,
+        "endLine": 7,
+        "startOffset": 130,
+        "endOffset": 228
+      },
+      "id": "8bde374e5e1cb1da",
+      "children": [
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 6,
+            "endLine": 6,
+            "startOffset": 130,
+            "endOffset": 132
+          },
+          "value": "A "
+        },
+        {
+          "kind": "link",
+          "span": {
+            "startLine": 6,
+            "endLine": 6,
+            "startOffset": 133,
+            "endOffset": 139
+          },
+          "url": "mailto:x@example.com",
+          "children": [
+            {
+              "kind": "text",
+              "span": {
+                "startLine": 6,
+                "endLine": 6,
+                "startOffset": 133,
+                "endOffset": 139
+              },
+              "value": "mailto"
+            }
+          ]
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 6,
+            "endLine": 6,
+            "startOffset": 162,
+            "endOffset": 169
+          },
+          "value": " and a "
+        },
+        {
+          "kind": "link",
+          "span": {
+            "startLine": 6,
+            "endLine": 6,
+            "startOffset": 170,
+            "endOffset": 173
+          },
+          "url": "tel:+1555",
+          "children": [
+            {
+              "kind": "text",
+              "span": {
+                "startLine": 6,
+                "endLine": 6,
+                "startOffset": 170,
+                "endOffset": 173
+              },
+              "value": "tel"
+            }
+          ]
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 6,
+            "endLine": 6,
+            "startOffset": 185,
+            "endOffset": 191
+          },
+          "value": " and a"
+        },
+        {
+          "kind": "softBreak"
+        },
+        {
+          "kind": "link",
+          "span": {
+            "startLine": 7,
+            "endLine": 7,
+            "startOffset": 193,
+            "endOffset": 201
+          },
+          "url": "../docs/guide.md#anchor",
+          "children": [
+            {
+              "kind": "text",
+              "span": {
+                "startLine": 7,
+                "endLine": 7,
+                "startOffset": 193,
+                "endOffset": 201
+              },
+              "value": "relative"
+            }
+          ]
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 7,
+            "endLine": 7,
+            "startOffset": 227,
+            "endOffset": 228
+          },
+          "value": "."
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "span": {
+        "startLine": 9,
+        "endLine": 9,
+        "startOffset": 230,
+        "endOffset": 299
+      },
+      "id": "711b52a649657600",
+      "children": [
+        {
+          "kind": "image",
+          "span": {
+            "startLine": 9,
+            "endLine": 9,
+            "startOffset": 232,
+            "endOffset": 245
+          },
+          "url": "",
+          "blocked": true,
+          "alt": "blocked image"
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 9,
+            "endLine": 9,
+            "startOffset": 261,
+            "endOffset": 266
+          },
+          "value": " and "
+        },
+        {
+          "kind": "image",
+          "span": {
+            "startLine": 9,
+            "endLine": 9,
+            "startOffset": 268,
+            "endOffset": 278
+          },
+          "url": "img/pic.png",
+          "alt": "good image",
+          "title": "Pic"
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 9,
+            "endLine": 9,
+            "startOffset": 298,
+            "endOffset": 299
+          },
+          "value": "."
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "span": {
+        "startLine": 11,
+        "endLine": 11,
+        "startOffset": 301,
+        "endOffset": 357
+      },
+      "id": "4f13d7913cead5cd",
+      "children": [
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 11,
+            "endLine": 11,
+            "startOffset": 301,
+            "endOffset": 305
+          },
+          "value": "See "
+        },
+        {
+          "kind": "link",
+          "span": {
+            "startLine": 11,
+            "endLine": 11,
+            "startOffset": 307,
+            "endOffset": 321
+          },
+          "url": "Wiki Page Name.md",
+          "source": "wikiLink",
+          "children": [
+            {
+              "kind": "text",
+              "span": {
+                "startLine": 11,
+                "endLine": 11,
+                "startOffset": 307,
+                "endOffset": 321
+              },
+              "value": "Wiki Page Name"
+            }
+          ]
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 11,
+            "endLine": 11,
+            "startOffset": 323,
+            "endOffset": 328
+          },
+          "value": " and "
+        },
+        {
+          "kind": "link",
+          "span": {
+            "startLine": 11,
+            "endLine": 11,
+            "startOffset": 338,
+            "endOffset": 346
+          },
+          "url": "Another.md",
+          "source": "wikiLink",
+          "children": [
+            {
+              "kind": "text",
+              "span": {
+                "startLine": 11,
+                "endLine": 11,
+                "startOffset": 338,
+                "endOffset": 346
+              },
+              "value": "labelled"
+            }
+          ]
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 11,
+            "endLine": 11,
+            "startOffset": 348,
+            "endOffset": 357
+          },
+          "value": " targets."
+        }
+      ]
+    },
+    {
+      "kind": "htmlBlock",
+      "span": {
+        "startLine": 13,
+        "endLine": 13,
+        "startOffset": 359,
+        "endOffset": 420
+      },
+      "id": "067d05128e0d35ad",
+      "html": "\u003cdiv\u003e\u003cem\u003ekept\u003c/em\u003e\u003c/div\u003e\n",
+      "unsafe": false
+    },
+    {
+      "kind": "paragraph",
+      "span": {
+        "startLine": 15,
+        "endLine": 15,
+        "startOffset": 421,
+        "endOffset": 463
+      },
+      "id": "c82c1657bb4f61ec",
+      "children": [
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 15,
+            "endLine": 15,
+            "startOffset": 421,
+            "endOffset": 428
+          },
+          "value": "Inline "
+        },
+        {
+          "kind": "htmlInline",
+          "span": {
+            "startLine": 15,
+            "endLine": 15,
+            "startOffset": 428,
+            "endOffset": 445
+          },
+          "html": "\u003cb\u003e",
+          "unsafe": false
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 15,
+            "endLine": 15,
+            "startOffset": 445,
+            "endOffset": 449
+          },
+          "value": "bold"
+        },
+        {
+          "kind": "htmlInline",
+          "span": {
+            "startLine": 15,
+            "endLine": 15,
+            "startOffset": 449,
+            "endOffset": 453
+          },
+          "html": "\u003c/b\u003e",
+          "unsafe": false
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 15,
+            "endLine": 15,
+            "startOffset": 453,
+            "endOffset": 463
+          },
+          "value": " raw HTML."
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "span": {
+        "startLine": 17,
+        "endLine": 17,
+        "startOffset": 465,
+        "endOffset": 515
+      },
+      "id": "54479aacd48395dc",
+      "children": [
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 17,
+            "endLine": 17,
+            "startOffset": 465,
+            "endOffset": 478
+          },
+          "value": "Footnote once"
+        },
+        {
+          "kind": "footnoteRef",
+          "index": 1
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 17,
+            "endLine": 17,
+            "startOffset": 482,
+            "endOffset": 492
+          },
+          "value": " and again"
+        },
+        {
+          "kind": "footnoteRef",
+          "index": 1
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 17,
+            "endLine": 17,
+            "startOffset": 496,
+            "endOffset": 510
+          },
+          "value": ", plus another"
+        },
+        {
+          "kind": "footnoteRef",
+          "index": 2
+        },
+        {
+          "kind": "text",
+          "span": {
+            "startLine": 17,
+            "endLine": 17,
+            "startOffset": 514,
+            "endOffset": 515
+          },
+          "value": "."
+        }
+      ]
+    },
+    {
+      "kind": "admonition",
+      "span": {
+        "startLine": 22,
+        "endLine": 23,
+        "startOffset": 576,
+        "endOffset": 625
+      },
+      "id": "0b44d1707ca5aac7",
+      "variant": "warning",
+      "title": "Warning",
+      "blocks": [
+        {
+          "kind": "paragraph",
+          "span": {
+            "startLine": 23,
+            "endLine": 23,
+            "startOffset": 591,
+            "endOffset": 625
+          },
+          "id": "bf164b86bf1cc976",
+          "children": [
+            {
+              "kind": "text",
+              "span": {
+                "startLine": 23,
+                "endLine": 23,
+                "startOffset": 591,
+                "endOffset": 604
+              },
+              "value": "Careful with "
+            },
+            {
+              "kind": "mathInline",
+              "span": {
+                "startLine": 23,
+                "endLine": 23,
+                "startOffset": 604,
+                "endOffset": 612
+              },
+              "source": "E=mc^2"
+            },
+            {
+              "kind": "text",
+              "span": {
+                "startLine": 23,
+                "endLine": 23,
+                "startOffset": 612,
+                "endOffset": 625
+              },
+              "value": " inline math."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "codeBlock",
+      "span": {
+        "startLine": 26,
+        "endLine": 26,
+        "startOffset": 633,
+        "endOffset": 646
+      },
+      "id": "df1d036cbbf3df46",
+      "language": "go",
+      "label": "go",
+      "runs": null,
+      "text": "package main\n"
+    },
+    {
+      "kind": "mathBlock",
+      "span": {
+        "startLine": 29,
+        "endLine": 31,
+        "startOffset": 651,
+        "endOffset": 671
+      },
+      "id": "98cc5ddff1fa8752",
+      "source": "\\sum_{i=1}^n i\n",
+      "engine": "katex"
+    },
+    {
+      "kind": "diagram",
+      "span": {
+        "startLine": 34,
+        "endLine": 35,
+        "startOffset": 684,
+        "endOffset": 703
+      },
+      "id": "1cd39c59532aee77",
+      "source": "graph LR\n  A --\u003e B\n",
+      "engine": "mermaid"
+    }
+  ],
+  "footnotes": [
+    {
+      "kind": "footnoteDef",
+      "span": {
+        "startLine": 19,
+        "endLine": 19,
+        "startOffset": 517,
+        "endOffset": 555
+      },
+      "id": "5fe1bd686b7b3041",
+      "index": 1,
+      "count": 2,
+      "blocks": [
+        {
+          "kind": "paragraph",
+          "span": {
+            "startLine": 19,
+            "endLine": 19,
+            "startOffset": 517,
+            "endOffset": 555
+          },
+          "id": "5fe1bd686b7b3041",
+          "children": [
+            {
+              "kind": "text",
+              "span": {
+                "startLine": 19,
+                "endLine": 19,
+                "startOffset": 523,
+                "endOffset": 548
+              },
+              "value": "First footnote body with "
+            },
+            {
+              "kind": "codeSpan",
+              "span": {
+                "startLine": 19,
+                "endLine": 19,
+                "startOffset": 549,
+                "endOffset": 553
+              },
+              "value": "code"
+            },
+            {
+              "kind": "text",
+              "span": {
+                "startLine": 19,
+                "endLine": 19,
+                "startOffset": 554,
+                "endOffset": 555
+              },
+              "value": "."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "footnoteDef",
+      "span": {
+        "startLine": 20,
+        "endLine": 20,
+        "startOffset": 556,
+        "endOffset": 574
+      },
+      "id": "a9057449b07f2a53",
+      "index": 2,
+      "count": 1,
+      "blocks": [
+        {
+          "kind": "paragraph",
+          "span": {
+            "startLine": 20,
+            "endLine": 20,
+            "startOffset": 556,
+            "endOffset": 574
+          },
+          "id": "a9057449b07f2a53",
+          "children": [
+            {
+              "kind": "text",
+              "span": {
+                "startLine": 20,
+                "endLine": 20,
+                "startOffset": 562,
+                "endOffset": 574
+              },
+              "value": "Second body."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
