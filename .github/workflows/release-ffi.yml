@@ -9,11 +9,10 @@ jobs:
   # Artifact smoke policy (v0.8.1 hardening plan): targets the runner
   # can execute run the C harness against the freshly built library
   # BEFORE upload — darwin-arm64 natively, darwin-amd64 under Rosetta,
-  # linux-amd64 natively; the wasm job runs the Node harness. The rest
-  # stay build-only: windows-amd64 is harness-covered per-commit by
-  # ci.yml's ffi job, linux-arm64 smoke is deliberately deferred (plan
-  # accepts build-only), and ios/android have no hosted runner that can
-  # execute those binaries at all.
+  # linux-amd64 and linux-arm64 natively on their own runners; the wasm
+  # job runs the Node harness. The rest stay build-only: windows-amd64
+  # is harness-covered per-commit by ci.yml's ffi job, and ios/android
+  # have no hosted runner that can execute those binaries at all.
   build:
     strategy:
       matrix:
@@ -42,7 +41,7 @@ jobs:
           CC: ${{ matrix.cc }}
         run: VERSION="$TAG" ./scripts/build-ffi.sh
       - name: Smoke test (native)
-        if: matrix.target == 'darwin-arm64' || matrix.target == 'linux-amd64'
+        if: matrix.target == 'darwin-arm64' || matrix.target == 'linux-amd64' || matrix.target == 'linux-arm64'
         run: |
           target="${{ matrix.target }}"
           dir="dist/ffi/$target"
