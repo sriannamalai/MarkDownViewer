@@ -32,3 +32,6 @@ go.work.sum
 # .vscode/
 
 dist/
+
+# npm (examples/web CI browser smoke)
+node_modules/

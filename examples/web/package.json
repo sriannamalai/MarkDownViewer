@@ -1,0 +1,8 @@
+{
+  "name": "mdviewer-web-playground-ci",
+  "private": true,
+  "description": "Pins playwright for the CI browser smoke (ci-playwright.mjs); the playground page itself has no dependencies.",
+  "devDependencies": {
+    "playwright": "1.62.0"
+  }
+}

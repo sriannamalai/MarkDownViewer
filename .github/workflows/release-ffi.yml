@@ -6,6 +6,14 @@ permissions:
 env:
   TAG: ${{ github.event.release.tag_name }}
 jobs:
+  # Artifact smoke policy (v0.8.1 hardening plan): targets the runner
+  # can execute run the C harness against the freshly built library
+  # BEFORE upload — darwin-arm64 natively, darwin-amd64 under Rosetta,
+  # linux-amd64 natively; the wasm job runs the Node harness. The rest
+  # stay build-only: windows-amd64 is harness-covered per-commit by
+  # ci.yml's ffi job, linux-arm64 smoke is deliberately deferred (plan
+  # accepts build-only), and ios/android have no hosted runner that can
+  # execute those binaries at all.
   build:
     strategy:
       matrix:
@@ -33,14 +41,49 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CC: ${{ matrix.cc }}
         run: VERSION="$TAG" ./scripts/build-ffi.sh
+      - name: Smoke test (native)
+        if: matrix.target == 'darwin-arm64' || matrix.target == 'linux-amd64'
+        run: |
+          target="${{ matrix.target }}"
+          dir="dist/ffi/$target"
+          gcc examples/c/harness.c -I"$dir" -L"$dir" -lmdviewer -o harness
+          if [[ "$target" == darwin-* ]]; then
+            DYLD_LIBRARY_PATH="$dir" ./harness
+          else
+            LD_LIBRARY_PATH="$dir" ./harness
+          fi
+      - name: Smoke test (darwin-amd64 under Rosetta)
+        if: matrix.target == 'darwin-amd64'
+        run: |
+          dir="dist/ffi/darwin-amd64"
+          gcc -arch x86_64 examples/c/harness.c -I"$dir" -L"$dir" -lmdviewer -o harness
+          # Rosetta 2 is normally present on GitHub macos-14 (Apple
+          # Silicon) runners; install it if a future image drops it.
+          if ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+            softwareupdate --install-rosetta --agree-to-license || true
+          fi
+          if arch -x86_64 /usr/bin/true 2>/dev/null; then
+            # `arch` strips DYLD_* from the environment (SIP), so the
+            # variable must be set by a child process instead: relay
+            # through /usr/bin/env.
+            arch -x86_64 /usr/bin/env DYLD_LIBRARY_PATH="$dir" ./harness
+          else
+            # Deliberate choice: if Rosetta genuinely cannot run on the
+            # runner, skip the smoke with a loud warning instead of
+            # failing the whole release — the artifact still built, and
+            # blocking every release on an emulator quirk is worse than
+            # shipping this one target unsmoked.
+            echo "::warning title=darwin-amd64 smoke skipped::Rosetta unavailable on this runner; artifact uploads WITHOUT execution smoke"
+          fi
       - name: Package
         run: |
           ver="${TAG#v}"
-          dir="dist/ffi/${{ matrix.target }}"
+          target="${{ matrix.target }}"
+          dir="dist/ffi/$target"
           test -d "$dir"   # target must match the build's GOOS-GOARCH output
-          zip="libmdviewer-${ver}-${{ matrix.target }}.zip"
+          zip="libmdviewer-${ver}-${target}.zip"
           cp LICENSE ffi/README.md "$dir"/
-          if [[ "${{ matrix.target }}" == windows-* ]]; then
+          if [[ "$target" == windows-* ]]; then
             (cd "$dir" && 7z a "../../../$zip" .)
           else
             (cd "$dir" && zip -r "../../../$zip" .)
@@ -49,6 +92,17 @@ jobs:
       - name: Upload to release
         env: {GH_TOKEN: '${{ github.token }}'}
         run: gh release upload "$TAG" "$ZIP" --clobber
+      - name: Record checksum
+        run: |
+          if command -v sha256sum >/dev/null; then
+            sha256sum "$ZIP" > "${{ matrix.target }}.sha256"
+          else
+            shasum -a 256 "$ZIP" > "${{ matrix.target }}.sha256"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sha256-${{ matrix.target }}
+          path: ${{ matrix.target }}.sha256
 
   wasm:
     runs-on: ubuntu-latest
@@ -61,6 +115,10 @@ jobs:
         with: {go-version: '1.26.x'}
       - name: Build
         run: VERSION="$TAG" ./scripts/build-wasm.sh
+      # The harness loads ../../dist/wasm/npm relative to its own file,
+      # which is exactly where build-wasm.sh just assembled the npm dir.
+      - name: Smoke test (Node harness)
+        run: node examples/node/harness.mjs
       - name: Package
         run: |
           ver="${TAG#v}"
@@ -70,6 +128,10 @@ jobs:
       - name: Upload to release
         env: {GH_TOKEN: '${{ github.token }}'}
         run: gh release upload "$TAG" "$ZIP" --clobber
+      - name: Record checksum
+        run: sha256sum "$ZIP" > wasm.sha256
+      - uses: actions/upload-artifact@v4
+        with: {name: sha256-wasm, path: wasm.sha256}
 
   ios:
     runs-on: macos-14
@@ -92,6 +154,10 @@ jobs:
       - name: Upload to release
         env: {GH_TOKEN: '${{ github.token }}'}
         run: gh release upload "$TAG" "$ZIP" --clobber
+      - name: Record checksum
+        run: shasum -a 256 "$ZIP" > ios.sha256
+      - uses: actions/upload-artifact@v4
+        with: {name: sha256-ios, path: ios.sha256}
   android:
     runs-on: ubuntu-latest
     defaults:
@@ -113,3 +179,34 @@ jobs:
       - name: Upload to release
         env: {GH_TOKEN: '${{ github.token }}'}
         run: gh release upload "$TAG" "$ZIP" --clobber
+      - name: Record checksum
+        run: sha256sum "$ZIP" > android.sha256
+      - uses: actions/upload-artifact@v4
+        with: {name: sha256-android, path: android.sha256}
+
+  # Aggregates every job's per-zip checksum into one SHA256SUMS file
+  # (standard `sha256sum` format, sorted by filename) and uploads it as
+  # the release's 9th asset, so consumers can `sha256sum -c` downloads.
+  checksums:
+    needs: [build, wasm, ios, android]
+    runs-on: ubuntu-latest
+    defaults:
+      run: {shell: bash}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sha256-*
+          path: sums
+          merge-multiple: true
+      - name: Aggregate and upload SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cat sums/*.sha256 | LC_ALL=C sort -k2 > SHA256SUMS
+          # One line per shipped zip: 5 build-matrix targets + wasm +
+          # ios + android. A mismatch means a job stopped uploading its
+          # checksum — fail loudly rather than publish a partial file.
+          test "$(wc -l < SHA256SUMS)" -eq 8
+          cat SHA256SUMS
+          gh release upload "$TAG" SHA256SUMS --clobber
