@@ -154,9 +154,11 @@ class MdvDocumentAdapter {
   /// block whose span satisfies `0 < span.startLine <= line` — the
   /// nearest PRECEDING block, the same fallback rule the HTML pipeline's
   /// scrollspy (`__mdvScrollToLine`, over `data-md-line` block
-  /// annotations) uses. Spans mark only each block's START line, so a
-  /// line inside a multi-line block resolves to that block, and a line in
-  /// the gap between two blocks resolves to the one above.
+  /// annotations) uses (body blocks; footnote-definition lines resolve
+  /// to the preceding body block here). Spans mark only each block's
+  /// START line, so a line inside a multi-line block resolves to that
+  /// block, and a line in the gap between two blocks resolves to the
+  /// one above.
   ///
   /// Blocks without a usable position — a null span (the wire omits spans
   /// the parser did not record) or a zero span (the spanless fallback; a

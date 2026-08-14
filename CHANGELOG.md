@@ -7,6 +7,38 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [0.10.1] - 2026-08-14
+
+Flutter plugin only — no library artifacts; the plugin runs against the
+v0.10.0 native binaries (the version handshake matches on major.minor).
+Dart-only additions that open `MdvDocumentView`'s list assembly to
+host-owned scrollables.
+
+### Added
+
+- **`MdvDocumentAdapter`** (`flutter/mdviewer`) — the list assembly
+  behind `MdvDocumentView`, exposed so hosts can compose the document's
+  items into ANY scrolling widget they choose (`itemCount` /
+  `itemBuilder` / `findChildIndexCallback` / `wrap`). The view is
+  reimplemented on the adapter, so a host-assembled list gets
+  byte-for-byte the items the sealed view renders — same
+  `(id, occurrenceIndex)` keys, footnotes item, inter-block padding, and
+  document shell. `itemBuilder` asserts on an out-of-range index (an
+  itemCount mismatch is a host bug, surfaced instead of rendering a
+  phantom item).
+- **Line mapping on the adapter** — `blockIndexForLine(line)` (the
+  nearest PRECEDING block by `span.startLine`, the same fallback rule
+  the HTML scrollspy's `__mdvScrollToLine` uses; null before the first
+  spanned block or on a spanless tree) and its inverse
+  `startLineForIndex(index)` (null for the footnotes item, out-of-range,
+  or a zero span) — the outline-jump / scrollspy / reading-position
+  primitives for host scrollables.
+- **`baseStyle`** on both `MdvDocumentAdapter` and `MdvDocumentView` —
+  a `TextStyle` MERGED over the default document style
+  (`color: palette.foreground, fontSize: 16, height: 1.5`), so a
+  fontSize-only override (a host text-scale setting) keeps the palette
+  color and line height.
+
 ## [0.10.0] - 2026-08-12
 
 The native render tree: a second renderer surface next to HTML. One new

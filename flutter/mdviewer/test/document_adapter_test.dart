@@ -543,6 +543,13 @@ void main() {
       expect(adapter.blockIndexForLine(4), 0);
       expect(adapter.blockIndexForLine(400), 0);
     });
+
+    test('negative line maps to null (lines are 1-based)', () {
+      final adapter = MdvDocumentAdapter(
+        tree([paraAt('a000a000a000a000', 'one', 1)]),
+      );
+      expect(adapter.blockIndexForLine(-1), isNull);
+    });
   });
 
   group('startLineForIndex', () {

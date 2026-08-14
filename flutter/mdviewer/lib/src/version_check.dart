@@ -4,7 +4,7 @@ import 'exceptions.dart';
 /// `version:` field — pubspec.yaml is not readable at plugin runtime, so
 /// the version is mirrored here as a compile-time constant, and a test
 /// (`test/version_handshake_test.dart`) asserts the two match.
-const mdviewerPluginVersion = '0.10.0';
+const mdviewerPluginVersion = '0.10.1';
 
 /// Matches a clean release version (`X.Y.Z`), capturing major and minor.
 /// Source builds are stamped by `git describe` (e.g. `0.8.1-6-gae98975`,

@@ -123,6 +123,12 @@ explicit approval). The flow, in order:
    plugin pin `flutter-v<ver>` — the first commit able to fetch that
    release's verified binaries — never a raw SHA.
 
+   Dart-only plugin release (no new native artifacts, as for 0.10.1):
+   skip steps 2–4's artifact work and checksums append entirely — bump
+   the pubspec/version constant, land the changelog, and tag that
+   commit `flutter-v<ver>`; the plugin runs against the previous
+   release's binaries (major.minor handshake).
+
 ## Developer Certificate of Origin (DCO)
 
 All contributions must be signed off, certifying you wrote the change or

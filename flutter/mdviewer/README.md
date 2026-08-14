@@ -22,8 +22,9 @@ resolver-rewritten image + a wiki-link in a `WebViewWidget`, and a
 
 ## Status
 
-Pre-pub.dev. `pubspec.yaml` tracks the monorepo release version
-(currently `0.9.0`) and carries
+Pre-pub.dev. `pubspec.yaml` tracks the plugin's release version
+(currently `0.10.1` — a Dart-only release that runs against the v0.10.0
+native artifacts; the version handshake matches on major.minor) and carries
 `publish_to: none` — this plugin is consumed as a path/git dependency
 today; publishing to pub.dev is a separately gated step (see the
 monorepo's `docs/Design.md` roadmap and `CHANGELOG.md`).
@@ -261,6 +262,64 @@ Two builders exist specifically as host hooks:
   block a collapsed "Raw HTML" disclosure with the mono source,
   regardless of `allowRawHTML`. A host that wants live HTML islands
   overrides this builder and owns that risk.
+
+### Composing your own scrollable: MdvDocumentAdapter
+
+`MdvDocumentView` is a sealed `ListView` — no scroll controller, no
+positions. When the host needs scroll control (jump to a heading,
+observe visible blocks, persist a reading position), use
+`MdvDocumentAdapter` (since v0.10.1): the list assembly behind the view,
+exposed so the document's items plug into ANY scrolling widget the host
+owns. The view is reimplemented on the adapter, so a host-assembled
+list renders byte-for-byte the same items — same
+`(id, occurrenceIndex)` keys, footnotes item, and document shell. If
+you don't need scroll control, keep using `MdvDocumentView`.
+
+The adapter takes the same parameters as the view minus `padding` (the
+host owns the scrollable and its outer padding). Example with the
+third-party [`scrollable_positioned_list`](https://pub.dev/packages/scrollable_positioned_list)
+package — **not a dependency of this plugin**; add it to your own app's
+pubspec if you want positioned scrolling:
+
+```dart
+class ReaderPage extends StatelessWidget {
+  ReaderPage({super.key, required this.tree});
+
+  final MdvTree tree;
+  final ItemScrollController scrollController = ItemScrollController();
+
+  @override
+  Widget build(BuildContext context) {
+    final adapter = MdvDocumentAdapter(tree); // cheap; construct per build
+    return adapter.wrap(
+      context,
+      ScrollablePositionedList.builder(
+        itemScrollController: scrollController,
+        itemCount: adapter.itemCount,
+        itemBuilder: adapter.itemBuilder,
+      ),
+    );
+  }
+}
+```
+
+With a delegate that accepts it (`ListView.builder`, slivers), also pass
+`findChildIndexCallback: adapter.findChildIndexCallback` so keyed block
+state survives index shifts across re-parses
+(`scrollable_positioned_list` has no such parameter — it reconciles by
+index internally).
+
+Two line-mapping members connect scroll positions to source lines
+(spans are always present on `renderTree` trees):
+
+- **`adapter.blockIndexForLine(line)`** — the item index for a source
+  line, by the nearest-PRECEDING-block rule the HTML scrollspy uses.
+  Outline jump: map the tapped heading's `span.startLine` to an index,
+  then `scrollController.scrollTo(index: ...)`.
+- **`adapter.startLineForIndex(index)`** — the inverse: the top visible
+  item's start line, e.g. from an `ItemPositionsListener`, for
+  persisting a reading position by line (null for the trailing
+  footnotes item).
 
 ### Notes and limitations
 
