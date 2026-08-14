@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../tree.dart';
-import 'block_builders.dart';
 import 'builders.dart';
+import 'document_adapter.dart';
 import 'palette.dart';
 
 /// Renders an [MdvTree] as native Flutter widgets — no webview, no
 /// bridge: a lazy [ListView] of the tree's blocks, with the footnotes
 /// section (when any) as a trailing item.
+///
+/// Implemented on [MdvDocumentAdapter] — hosts that need scroll
+/// control (jump to a heading, observe positions, persist a reading
+/// position) compose the adapter's items into their own scrolling
+/// widget instead of using this sealed view; the items are
+/// byte-for-byte identical.
 ///
 /// # Item keys and duplicate ids
 ///
@@ -39,6 +45,7 @@ class MdvDocumentView extends StatelessWidget {
     this.imageProvider,
     this.selectable = true,
     this.padding = const EdgeInsets.all(16),
+    this.baseStyle,
   });
 
   /// The typed render tree ([Mdviewer.renderTree] / [Mdviewer.renderTreeDoc]).
@@ -66,95 +73,31 @@ class MdvDocumentView extends StatelessWidget {
   /// Scroll padding around the document.
   final EdgeInsetsGeometry padding;
 
+  /// Merged OVER the default document text style
+  /// `TextStyle(color: palette.foreground, fontSize: 16, height: 1.5)`
+  /// — so a fontSize-only override (e.g. a host text-scale setting)
+  /// keeps the palette color and line height. Null keeps the default.
+  final TextStyle? baseStyle;
+
   @override
   Widget build(BuildContext context) {
-    final palette =
-        this.palette ??
-        (Theme.of(context).brightness == Brightness.dark
-            ? MdvPalette.dark
-            : MdvPalette.light);
-    final scope = MdvRenderScope(
+    final adapter = MdvDocumentAdapter(
+      tree,
       palette: palette,
       builders: builders,
       onLinkTap: onLinkTap,
       imageProvider: imageProvider,
       selectable: selectable,
-      baseStyle: TextStyle(
-        color: palette.foreground,
-        fontSize: 16,
-        height: 1.5,
+      baseStyle: baseStyle,
+    );
+    return adapter.wrap(
+      context,
+      ListView.builder(
+        padding: padding,
+        itemCount: adapter.itemCount,
+        findChildIndexCallback: adapter.findChildIndexCallback,
+        itemBuilder: adapter.itemBuilder,
       ),
-    );
-
-    // (id, occurrenceIndex) keys — see the class doc — plus the
-    // reverse key->index map findChildIndexCallback needs: the sliver
-    // delegate reconciles children BY INDEX, so without the callback a
-    // block's element (and State) would NOT follow its key when an
-    // insertion or removal shifts indices — everything downstream would
-    // be torn down and rebuilt. With it, keyed elements are relocated
-    // to their new indices and block state (an expanded disclosure, a
-    // code pane's scroll offset) survives edits elsewhere in the
-    // document. This is also what makes the occurrence suffix
-    // load-bearing: the map must be injective, which bare duplicate
-    // ids could not provide.
-    final keys = <ValueKey<String>>[];
-    final indexForKey = <Key, int>{};
-    final seen = <String, int>{};
-    for (var i = 0; i < tree.blocks.length; i++) {
-      final n = seen.update(tree.blocks[i].id, (v) => v + 1, ifAbsent: () => 0);
-      final key = ValueKey('${tree.blocks[i].id}#$n');
-      keys.add(key);
-      indexForKey[key] = i;
-    }
-
-    final hasFootnotes = tree.footnotes.isNotEmpty;
-    final itemCount = tree.blocks.length + (hasFootnotes ? 1 : 0);
-    if (hasFootnotes) {
-      indexForKey[const ValueKey('mdv-footnotes')] = tree.blocks.length;
-    }
-
-    Widget list = ListView.builder(
-      padding: padding,
-      itemCount: itemCount,
-      findChildIndexCallback: (key) => indexForKey[key],
-      itemBuilder: (context, i) {
-        if (i >= tree.blocks.length) {
-          return KeyedSubtree(
-            key: const ValueKey('mdv-footnotes'),
-            child: _footnotesSection(context, scope),
-          );
-        }
-        return KeyedSubtree(
-          key: keys[i],
-          child: Padding(
-            padding: EdgeInsets.only(bottom: i == itemCount - 1 ? 0 : 12),
-            child: buildMdvBlock(context, tree.blocks[i], scope),
-          ),
-        );
-      },
-    );
-    if (selectable) list = SelectionArea(child: list);
-    return ColoredBox(
-      color: palette.background,
-      child: DefaultTextStyle.merge(style: scope.baseStyle, child: list),
-    );
-  }
-
-  /// The trailing footnotes section: a rule, then every definition in
-  /// first-reference order. v1 keeps references superscript-only —
-  /// tapping a ref does not yet scroll to its definition.
-  Widget _footnotesSection(BuildContext context, MdvRenderScope scope) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Divider(color: scope.palette.border, height: 24, thickness: 1),
-        for (final def in tree.footnotes)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: buildMdvBlock(context, def, scope),
-          ),
-      ],
     );
   }
 }

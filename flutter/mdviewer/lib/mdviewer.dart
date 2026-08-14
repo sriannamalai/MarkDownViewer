@@ -13,6 +13,7 @@ export 'src/version_check.dart';
 export 'src/widgets/block_builders.dart'
     show MdvCodeBlockView, MdvCopyButton, buildMdvBlock, mdvAdmonitionColor;
 export 'src/widgets/builders.dart';
+export 'src/widgets/document_adapter.dart';
 export 'src/widgets/document_view.dart';
 export 'src/widgets/inline_spans.dart';
 export 'src/widgets/palette.dart';
