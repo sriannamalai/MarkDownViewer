@@ -282,15 +282,22 @@ package — **not a dependency of this plugin**; add it to your own app's
 pubspec if you want positioned scrolling:
 
 ```dart
-class ReaderPage extends StatelessWidget {
-  ReaderPage({super.key, required this.tree});
+class ReaderPage extends StatefulWidget {
+  const ReaderPage({super.key, required this.tree});
 
   final MdvTree tree;
+
+  @override
+  State<ReaderPage> createState() => _ReaderPageState();
+}
+
+class _ReaderPageState extends State<ReaderPage> {
   final ItemScrollController scrollController = ItemScrollController();
 
   @override
   Widget build(BuildContext context) {
-    final adapter = MdvDocumentAdapter(tree); // cheap; construct per build
+    final adapter =
+        MdvDocumentAdapter(widget.tree); // cheap; construct per build
     return adapter.wrap(
       context,
       ScrollablePositionedList.builder(
@@ -310,12 +317,13 @@ state survives index shifts across re-parses
 index internally).
 
 Two line-mapping members connect scroll positions to source lines
-(spans are always present on `renderTree` trees):
+(`renderTree` trees carry spans; blocks without a recorded span, and
+doc-JSON trees without spans, return null):
 
 - **`adapter.blockIndexForLine(line)`** — the item index for a source
   line, by the nearest-PRECEDING-block rule the HTML scrollspy uses.
   Outline jump: map the tapped heading's `span.startLine` to an index,
-  then `scrollController.scrollTo(index: ...)`.
+  then `scrollController.scrollTo(index: i, duration: ...)`.
 - **`adapter.startLineForIndex(index)`** — the inverse: the top visible
   item's start line, e.g. from an `ItemPositionsListener`, for
   persisting a reading position by line (null for the trailing
