@@ -47,6 +47,10 @@ import 'palette.dart';
 /// state (e.g. code-pane scroll) across re-parses — provided the host's
 /// list delegate routes [findChildIndexCallback], which maps those keys
 /// back to their (new) indices.
+///
+/// Like [MdvDocumentView], the built items expect a [MaterialApp] (or at
+/// least `Directionality` + `Material`) ancestor around the host's
+/// scrollable.
 class MdvDocumentAdapter {
   MdvDocumentAdapter(
     this.tree, {
@@ -123,6 +127,13 @@ class MdvDocumentAdapter {
   /// `ValueKey('mdv-footnotes')`. Matches
   /// `SliverChildBuilderDelegate`'s builder signature.
   Widget itemBuilder(BuildContext context, int index) {
+    // An out-of-range index is a host bug (an itemCount mismatch): surface
+    // it here rather than silently rendering a phantom footnotes section
+    // on a footnoteless tree.
+    assert(
+      index >= 0 && index < itemCount,
+      'index $index outside 0..<$itemCount',
+    );
     final scope = _scopeOf(context);
     if (index >= tree.blocks.length) {
       return KeyedSubtree(
@@ -137,6 +148,41 @@ class MdvDocumentAdapter {
         child: buildMdvBlock(context, tree.blocks[index], scope),
       ),
     );
+  }
+
+  /// The index of the block containing source [line]: the LAST top-level
+  /// block whose span satisfies `0 < span.startLine <= line` — the
+  /// nearest PRECEDING block, the same fallback rule the HTML pipeline's
+  /// scrollspy (`__mdvScrollToLine`, over `data-md-line` block
+  /// annotations) uses. Spans mark only each block's START line, so a
+  /// line inside a multi-line block resolves to that block, and a line in
+  /// the gap between two blocks resolves to the one above.
+  ///
+  /// Blocks without a usable position — a null span (the wire omits spans
+  /// the parser did not record) or a zero span (the spanless fallback; a
+  /// real block never starts at line 0, lines are 1-based) — are skipped,
+  /// never treated as starting at line 0. Returns null when no block
+  /// qualifies: [line] precedes the first spanned block, or the tree
+  /// carries no spans at all (e.g. built from doc JSON without spans).
+  int? blockIndexForLine(int line) {
+    int? best;
+    for (var i = 0; i < tree.blocks.length; i++) {
+      final start = tree.blocks[i].span?.startLine ?? 0;
+      if (start > 0 && start <= line) best = i;
+    }
+    return best;
+  }
+
+  /// The source line block [index] starts on (`span.startLine`, 1-based)
+  /// — the inverse direction of [blockIndexForLine], e.g. for persisting
+  /// a reading position by line. Returns null when the item has no usable
+  /// position: the trailing footnotes item (which aggregates definitions
+  /// from all over the source), an out-of-range index, or a block with a
+  /// null or zero span (see [blockIndexForLine]).
+  int? startLineForIndex(int index) {
+    if (index < 0 || index >= tree.blocks.length) return null;
+    final start = tree.blocks[index].span?.startLine ?? 0;
+    return start > 0 ? start : null;
   }
 
   /// The injective key→index map for the host's list delegate

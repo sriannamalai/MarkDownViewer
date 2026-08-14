@@ -17,6 +17,15 @@ MdvFootnoteDef footnote(String id, int index, String text) => MdvFootnoteDef(
   blocks: [para('$id-p', text)],
 );
 
+/// A paragraph whose span starts (and ends) at [line] — offsets are
+/// irrelevant to line mapping, so they stay 0. `line: 0` builds the
+/// zero span (the tree's spanless fallback shape).
+MdvParagraph paraAt(String id, String text, int line) => MdvParagraph(
+  id: id,
+  span: MdvSpan(startLine: line, endLine: line, startOffset: 0, endOffset: 0),
+  children: [MdvText(value: text)],
+);
+
 Widget harness(Widget child, {ThemeData? theme}) => MaterialApp(
   theme: theme,
   home: Scaffold(body: child),
@@ -434,6 +443,186 @@ void main() {
       ];
       expect(rendered, expected);
       expect(rendered.last, const ValueKey('mdv-footnotes'));
+    });
+  });
+
+  group('itemBuilder bounds', () {
+    testWidgets('out-of-range index asserts instead of rendering a phantom '
+        'footnotes section', (tester) async {
+      final ctx = await pumpContext(tester);
+      final noFoot = MdvDocumentAdapter(tree([para('a000a000a000a000', 'x')]));
+      expect(() => noFoot.itemBuilder(ctx, 1), throwsAssertionError);
+      expect(() => noFoot.itemBuilder(ctx, -1), throwsAssertionError);
+
+      final withFoot = MdvDocumentAdapter(
+        tree(
+          [para('a000a000a000a000', 'x')],
+          footnotes: [footnote('f000f000f000f000', 1, 'note')],
+        ),
+      );
+      expect(() => withFoot.itemBuilder(ctx, 2), throwsAssertionError);
+    });
+  });
+
+  group('blockIndexForLine', () {
+    test('exact hit: a line equal to a block startLine maps to that block', () {
+      final adapter = MdvDocumentAdapter(
+        tree([
+          paraAt('a000a000a000a000', 'one', 1),
+          paraAt('b000b000b000b000', 'two', 5),
+          paraAt('c000c000c000c000', 'three', 9),
+        ]),
+      );
+      expect(adapter.blockIndexForLine(1), 0);
+      expect(adapter.blockIndexForLine(5), 1);
+      expect(adapter.blockIndexForLine(9), 2);
+    });
+
+    test('between blocks: nearest PRECEDING block wins', () {
+      final adapter = MdvDocumentAdapter(
+        tree([
+          paraAt('a000a000a000a000', 'one', 1),
+          paraAt('b000b000b000b000', 'two', 5),
+          paraAt('c000c000c000c000', 'three', 9),
+        ]),
+      );
+      expect(adapter.blockIndexForLine(4), 0);
+      expect(adapter.blockIndexForLine(7), 1);
+      expect(adapter.blockIndexForLine(999), 2); // past the last block
+    });
+
+    test('line before the first spanned block maps to null', () {
+      final adapter = MdvDocumentAdapter(
+        tree([
+          paraAt('a000a000a000a000', 'one', 3),
+          paraAt('b000b000b000b000', 'two', 7),
+        ]),
+      );
+      expect(adapter.blockIndexForLine(1), isNull);
+      expect(adapter.blockIndexForLine(2), isNull);
+    });
+
+    test('fully spanless tree (null spans) maps every line to null', () {
+      final adapter = MdvDocumentAdapter(
+        tree([
+          para('a000a000a000a000', 'one'),
+          para('b000b000b000b000', 'two'),
+        ]),
+      );
+      expect(adapter.blockIndexForLine(0), isNull);
+      expect(adapter.blockIndexForLine(1), isNull);
+      expect(adapter.blockIndexForLine(999), isNull);
+    });
+
+    test('zero-span and spanless blocks interleaved are skipped, never '
+        'treated as line 0', () {
+      final adapter = MdvDocumentAdapter(
+        tree([
+          paraAt('a000a000a000a000', 'spanned', 2),
+          paraAt('b000b000b000b000', 'zero', 0), // zero span
+          para('c000c000c000c000', 'null span'),
+          paraAt('d000d000d000d000', 'spanned too', 8),
+        ]),
+      );
+      // Lines inside the gap resolve to the spanned block at line 2 —
+      // never to the zero/null-span blocks that follow it.
+      expect(adapter.blockIndexForLine(2), 0);
+      expect(adapter.blockIndexForLine(5), 0);
+      expect(adapter.blockIndexForLine(7), 0);
+      expect(adapter.blockIndexForLine(8), 3);
+      // A line before every spanned block is null even though the
+      // zero-span block "starts at 0 <= 1" numerically.
+      expect(adapter.blockIndexForLine(1), isNull);
+    });
+
+    test('single-block doc', () {
+      final adapter = MdvDocumentAdapter(
+        tree([paraAt('a000a000a000a000', 'only', 4)]),
+      );
+      expect(adapter.blockIndexForLine(3), isNull);
+      expect(adapter.blockIndexForLine(4), 0);
+      expect(adapter.blockIndexForLine(400), 0);
+    });
+  });
+
+  group('startLineForIndex', () {
+    test('returns each spanned block startLine', () {
+      final adapter = MdvDocumentAdapter(
+        tree([
+          paraAt('a000a000a000a000', 'one', 1),
+          paraAt('b000b000b000b000', 'two', 6),
+        ]),
+      );
+      expect(adapter.startLineForIndex(0), 1);
+      expect(adapter.startLineForIndex(1), 6);
+    });
+
+    test('footnotes item index maps to null', () {
+      final adapter = MdvDocumentAdapter(
+        tree(
+          [paraAt('a000a000a000a000', 'body', 1)],
+          footnotes: [footnote('f000f000f000f000', 1, 'note')],
+        ),
+      );
+      expect(adapter.itemCount, 2);
+      expect(adapter.startLineForIndex(1), isNull); // the footnotes item
+    });
+
+    test('negative and out-of-range indices map to null', () {
+      final adapter = MdvDocumentAdapter(
+        tree([paraAt('a000a000a000a000', 'only', 1)]),
+      );
+      expect(adapter.startLineForIndex(-1), isNull);
+      expect(adapter.startLineForIndex(1), isNull);
+      expect(adapter.startLineForIndex(999), isNull);
+    });
+
+    test('zero and null spans map to null', () {
+      final adapter = MdvDocumentAdapter(
+        tree([
+          paraAt('a000a000a000a000', 'zero', 0),
+          para('b000b000b000b000', 'null span'),
+        ]),
+      );
+      expect(adapter.startLineForIndex(0), isNull);
+      expect(adapter.startLineForIndex(1), isNull);
+    });
+  });
+
+  group('line mapping over a real parse', () {
+    final mdv = Mdviewer.instance;
+
+    test('renderTree spans drive both directions of the mapping', () {
+      final parsed = mdv.renderTree('# Title\n\npara one\n\npara two\n');
+      final adapter = MdvDocumentAdapter(parsed);
+      expect(parsed.blocks, hasLength(3));
+
+      // The parse annotates real 1-based start lines.
+      expect(
+        [for (var i = 0; i < 3; i++) adapter.startLineForIndex(i)],
+        [1, 3, 5],
+      );
+
+      // Exact hits and nearest-preceding, against the parsed spans.
+      expect(adapter.blockIndexForLine(1), 0);
+      expect(adapter.blockIndexForLine(2), 0);
+      expect(adapter.blockIndexForLine(3), 1);
+      expect(adapter.blockIndexForLine(4), 1);
+      expect(adapter.blockIndexForLine(5), 2);
+      expect(adapter.blockIndexForLine(999), 2);
+
+      // Round trip: every block's own startLine maps back to it.
+      for (var i = 0; i < parsed.blocks.length; i++) {
+        expect(adapter.blockIndexForLine(adapter.startLineForIndex(i)!), i);
+      }
+    });
+
+    test('real footnotes: the trailing item has no start line', () {
+      final parsed = mdv.renderTree('body.[^1]\n\n[^1]: The note.\n');
+      final adapter = MdvDocumentAdapter(parsed);
+      expect(parsed.footnotes, isNotEmpty);
+      expect(adapter.itemCount, parsed.blocks.length + 1);
+      expect(adapter.startLineForIndex(parsed.blocks.length), isNull);
     });
   });
 }
