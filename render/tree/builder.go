@@ -68,10 +68,9 @@ func Build(doc *document.Document, opts Options) (*Tree, error) {
 	if doc == nil {
 		return nil, errors.New("tree: nil document")
 	}
-	fns := derive.Footnotes(doc)
-	b := &builder{opts: opts, footnoteDefID: previewFootnoteDefIDs(opts.Source, fns)}
+	b := &builder{opts: opts}
 	t := &Tree{Blocks: b.blocks(doc)}
-	for _, fn := range fns {
+	for _, fn := range derive.Footnotes(doc) {
 		def := fn.Def
 		t.Footnotes = append(t.Footnotes, Footnote{
 			Span:     def.Span(),
@@ -81,6 +80,23 @@ func Build(doc *document.Document, opts Options) (*Tree, error) {
 			Blocks:   b.blocks(def),
 		})
 	}
+	// Backfill FootnoteRef.DefID now that every Footnote has its real id
+	// (content-hash or fallback) — refs were built earlier, while
+	// walking the document body, before any definition was emitted, so
+	// the value couldn't be known at construction time. This works
+	// identically regardless of Options.Source: the parity a host
+	// expects between renderTree(md) and renderTreeDoc(parse(md)) is
+	// that DefID is populated whenever the matching Footnote.ID is
+	// (fallback ids included), not just in the content-hash case.
+	if len(b.footnoteRefs) > 0 {
+		defByIndex := make(map[int]string, len(t.Footnotes))
+		for _, fn := range t.Footnotes {
+			defByIndex[fn.Index] = fn.ID
+		}
+		for _, ref := range b.footnoteRefs {
+			ref.DefID = defByIndex[ref.Index] // "" for a stray ref with no matching def
+		}
+	}
 	return t, nil
 }
 
@@ -88,18 +104,15 @@ type builder struct {
 	opts    Options
 	ordinal int // document-order count of every emitted block (items and footnotes included)
 
-	// footnoteDefID maps a footnote's Index to the block id its
-	// Footnote entry will carry, so FootnoteRef inlines — built before
-	// the trailing footnotes loop assigns real ids — can carry a
-	// same-value DefID. See previewFootnoteDefIDs.
-	footnoteDefID map[int]string
+	// footnoteRefs collects every *FootnoteRef built while walking the
+	// document body, so Build can backfill their DefID once every
+	// Footnote's real id is known (see the comment in Build).
+	footnoteRefs []*FootnoteRef
 }
 
 // contentHashID computes the content-hash form of a block id —
 // hex(sha256(src[span.StartOffset:span.EndOffset]))[:16] — when src and
-// span support it. It is a pure function of src+span (no ordinal
-// dependency), which is what lets previewFootnoteDefIDs compute it
-// ahead of the document-order traversal that assigns fallback ids.
+// span support it.
 func contentHashID(src []byte, span document.Span) (string, bool) {
 	if len(src) > 0 && !span.IsZero() &&
 		span.StartOffset >= 0 && span.StartOffset <= span.EndOffset && span.EndOffset <= len(src) {
@@ -107,31 +120,6 @@ func contentHashID(src []byte, span document.Span) (string, bool) {
 		return hex.EncodeToString(sum[:8]), true
 	}
 	return "", false
-}
-
-// previewFootnoteDefIDs computes, ahead of the main build traversal,
-// the block id each footnote definition's eventual Footnote entry will
-// carry — so FootnoteRef.DefID (set while walking the document body,
-// before any footnote definition is actually emitted) can carry the
-// matching value. Only resolvable in the content-hash case (Source
-// provided and the definition has a real span): the fallback
-// kind+ordinal id depends on the ordinal position definitions are
-// emitted at in the trailing footnotes loop, which isn't known yet
-// here, so those entries are simply omitted — FootnoteRef.DefID stays
-// "" for them, and hosts fall back to Tree.FootnoteByIndex. This never
-// touches builder.ordinal, so it cannot perturb any other block's
-// fallback id.
-func previewFootnoteDefIDs(src []byte, fns []derive.Footnote) map[int]string {
-	if len(fns) == 0 {
-		return nil
-	}
-	ids := make(map[int]string, len(fns))
-	for _, fn := range fns {
-		if id, ok := contentHashID(src, fn.Def.Span()); ok {
-			ids[fn.Def.Index] = id
-		}
-	}
-	return ids
 }
 
 // id derives a block's identity: the content hash of its span's source
@@ -358,7 +346,9 @@ func (b *builder) inline(n document.Node) Inline {
 		html, unsafe := b.rawHTML(n.HTML)
 		return &HTMLInline{Span: span, HTML: html, Unsafe: unsafe}
 	case *document.FootnoteRef:
-		return &FootnoteRef{Index: n.Index, DefID: b.footnoteDefID[n.Index]}
+		ref := &FootnoteRef{Index: n.Index}
+		b.footnoteRefs = append(b.footnoteRefs, ref)
+		return ref
 	default:
 		return nil // unknown node: dropped
 	}

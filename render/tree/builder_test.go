@@ -548,11 +548,16 @@ func TestFootnoteJumpToDefinition(t *testing.T) {
 	}
 }
 
-// TestFootnoteDefIDFallbackEmpty: without Source, FootnoteRef.DefID is
-// unresolvable ahead of build (it would depend on the ordinal position
-// definitions are emitted at), so it stays "" — but FootnoteByIndex
-// still resolves the definition regardless.
-func TestFootnoteDefIDFallbackEmpty(t *testing.T) {
+// TestFootnoteDefIDFallbackMode: without Source, block ids (including
+// footnote def ids) take the positional fallback form instead of
+// content hashes, but FootnoteRef.DefID is still populated — matching
+// the corresponding Footnote.ID exactly, same as the content-hash
+// case — since it is backfilled after every Footnote's real id is
+// known, not precomputed ahead of the ordinal-assigning traversal.
+// This is the renderTreeDoc(parse(md)) path's shape (no source bytes
+// available), and must carry the same DefID-population guarantee the
+// renderTree(md) path does (see TestFootnoteRefDefIDPathParity).
+func TestFootnoteDefIDFallbackMode(t *testing.T) {
 	doc, err := parser.Parse([]byte("one[^a]\n\n[^a]: A body.\n"))
 	if err != nil {
 		t.Fatal(err)
@@ -561,14 +566,69 @@ func TestFootnoteDefIDFallbackEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(tr.Footnotes) != 1 || tr.Footnotes[0].ID == "" {
+		t.Fatalf("footnote def: %+v", tr.Footnotes)
+	}
 	p := tr.Blocks[0].(*tree.Paragraph)
 	ref := p.Children[len(p.Children)-1].(*tree.FootnoteRef)
-	if ref.DefID != "" {
-		t.Fatalf("DefID without Source: %q, want empty", ref.DefID)
+	if ref.DefID == "" || ref.DefID != tr.Footnotes[0].ID {
+		t.Fatalf("DefID = %q, want %q (matching Footnote.ID)", ref.DefID, tr.Footnotes[0].ID)
 	}
 	def, ok := tr.FootnoteByIndex(ref.Index)
-	if !ok || def.ID == "" {
-		t.Fatalf("FootnoteByIndex still must resolve: %+v ok=%v", def, ok)
+	if !ok || def.ID != ref.DefID {
+		t.Fatalf("FootnoteByIndex mismatch: %+v ok=%v, want ID %q", def, ok, ref.DefID)
+	}
+}
+
+// TestFootnoteRefDefIDPathParity: DefID population must not depend on
+// which of the two build paths produced the tree — building straight
+// from markdown (Source set, renderTree's path) versus building from
+// an already-parsed document with no Source at hand (renderTreeDoc's
+// path) — since a host consuming either surface expects the same
+// jump-to-definition capability either way, even though the concrete
+// id VALUES legitimately differ (content hash vs. positional
+// fallback; see "Block identity").
+func TestFootnoteRefDefIDPathParity(t *testing.T) {
+	const md = "one[^a] two[^a] three[^b]\n\n[^a]: A body.\n[^b]: B body.\n"
+	doc, err := parser.Parse([]byte(md))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fromMarkdown := buildDefault(t, md) // Source set: the renderTree(md) shape
+	opts := tree.DefaultOptions()
+	opts.Source = nil // no Source: the renderTreeDoc(parse(md)) shape
+	fromDoc, err := tree.Build(doc, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refsOf := func(tr *tree.Tree) []*tree.FootnoteRef {
+		var refs []*tree.FootnoteRef
+		for _, in := range tr.Blocks[0].(*tree.Paragraph).Children {
+			if r, ok := in.(*tree.FootnoteRef); ok {
+				refs = append(refs, r)
+			}
+		}
+		return refs
+	}
+	for _, tc := range []struct {
+		name string
+		tr   *tree.Tree
+	}{{"renderTree(md)", fromMarkdown}, {"renderTreeDoc(parse(md))", fromDoc}} {
+		refs := refsOf(tc.tr)
+		if len(refs) != 3 {
+			t.Fatalf("%s: ref sites: %d", tc.name, len(refs))
+		}
+		for i, r := range refs {
+			if r.DefID == "" {
+				t.Errorf("%s: ref %d (index %d): DefID empty, want populated", tc.name, i, r.Index)
+				continue
+			}
+			def, ok := tc.tr.FootnoteByIndex(r.Index)
+			if !ok || def.ID != r.DefID {
+				t.Errorf("%s: ref %d: DefID %q does not match FootnoteByIndex(%d) = %+v ok=%v",
+					tc.name, i, r.DefID, r.Index, def, ok)
+			}
+		}
 	}
 }
 

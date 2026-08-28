@@ -397,20 +397,23 @@ type HTMLInline struct {
 // (the parser records none).
 //
 // DefID is the definition's block id (the same value as the matching
-// [Footnote].ID) — an explicit ref→definition linkage so a host can
-// jump straight to the definition it should key/scroll to, without
-// scanning Tree.Footnotes by Index or reconstructing the link from
-// source line numbers. It is only populated when that id is knowable
-// before the definition itself is built, which requires
-// Options.Source and a real (non-zero) definition span — the same
-// precondition content-hash block ids need in general (see "Block
-// identity"); otherwise it is "" (omitted on the wire), and hosts fall
-// back to [Tree.FootnoteByIndex], which always works regardless of
-// Source.
+// [Footnote].ID, whether that id is a content hash or a positional
+// fallback) — an explicit ref→definition linkage so a host can jump
+// straight to the definition it should key/scroll to, without scanning
+// Tree.Footnotes by Index or reconstructing the link from source line
+// numbers. Populated for every ref whose Index matches a definition in
+// the same Tree, regardless of Options.Source — this is consistent
+// whether the tree came from markdown directly or from previously
+// parsed document JSON (a document.Document has no source bytes on
+// that path, so ordinary block ids there are the positional fallback
+// form, and DefID matches that same fallback value). It is "" (omitted
+// on the wire) only for a ref with no matching definition at all (a
+// hand-built tree with a stray/mismatched Index). [Tree.FootnoteByIndex]
+// performs the equivalent lookup directly against Tree.Footnotes.
 // Wire: {"kind":"footnoteRef","index",("defId")}.
 type FootnoteRef struct {
 	Index int
-	DefID string // "" (omitted) when not resolvable ahead of build; see doc above
+	DefID string // "" (omitted) only when no definition has a matching Index
 }
 
 func (*Heading) isBlock()        {}
