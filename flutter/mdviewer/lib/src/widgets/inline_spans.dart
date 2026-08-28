@@ -142,16 +142,22 @@ class _MdvInlineTextState extends State<MdvInlineText> {
               .copyWith(color: palette.quoteForeground),
         );
       case MdvFootnoteRef r:
+        final onFootnoteRefTap = scope.onFootnoteRefTap;
+        final refStyle = style.copyWith(
+          color: palette.accent,
+          fontSize: (style.fontSize ?? 14) * 0.7,
+          fontFeatures: const [FontFeature.superscripts()],
+        );
+        final text = Text('${r.index}', style: refStyle);
         return WidgetSpan(
           alignment: PlaceholderAlignment.top,
-          child: Text(
-            '${r.index}',
-            style: style.copyWith(
-              color: palette.accent,
-              fontSize: (style.fontSize ?? 14) * 0.7,
-              fontFeatures: const [FontFeature.superscripts()],
-            ),
-          ),
+          child: onFootnoteRefTap == null
+              ? text
+              : GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onFootnoteRefTap(r.index),
+                  child: text,
+                ),
         );
       case MdvUnknownInline u:
         assert(() {

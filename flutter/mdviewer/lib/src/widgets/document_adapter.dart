@@ -57,6 +57,7 @@ class MdvDocumentAdapter {
     this.palette,
     this.builders = const MdvBuilders(),
     this.onLinkTap,
+    this.onFootnoteRefTap,
     this.imageProvider,
     this.selectable = true,
     this.baseStyle,
@@ -99,6 +100,11 @@ class MdvDocumentAdapter {
   /// Tap callback for (non-blocked) links; null renders links styled
   /// but inert. Blocked links are always inert.
   final MdvLinkTapCallback? onLinkTap;
+
+  /// Tap callback for a footnote reference marker; null keeps every
+  /// marker inert (superscript-only, matching the pre-existing
+  /// default).
+  final MdvFootnoteRefTapCallback? onFootnoteRefTap;
 
   /// Host image resolution; null renders every image as its alt-text
   /// placeholder.
@@ -225,6 +231,7 @@ class MdvDocumentAdapter {
       palette: palette,
       builders: builders,
       onLinkTap: onLinkTap,
+      onFootnoteRefTap: onFootnoteRefTap,
       imageProvider: imageProvider,
       selectable: selectable,
       baseStyle: _baseStyleOf(palette),
