@@ -68,9 +68,10 @@ func Build(doc *document.Document, opts Options) (*Tree, error) {
 	if doc == nil {
 		return nil, errors.New("tree: nil document")
 	}
-	b := &builder{opts: opts}
+	fns := derive.Footnotes(doc)
+	b := &builder{opts: opts, footnoteDefID: previewFootnoteDefIDs(opts.Source, fns)}
 	t := &Tree{Blocks: b.blocks(doc)}
-	for _, fn := range derive.Footnotes(doc) {
+	for _, fn := range fns {
 		def := fn.Def
 		t.Footnotes = append(t.Footnotes, Footnote{
 			Span:     def.Span(),
@@ -86,6 +87,51 @@ func Build(doc *document.Document, opts Options) (*Tree, error) {
 type builder struct {
 	opts    Options
 	ordinal int // document-order count of every emitted block (items and footnotes included)
+
+	// footnoteDefID maps a footnote's Index to the block id its
+	// Footnote entry will carry, so FootnoteRef inlines — built before
+	// the trailing footnotes loop assigns real ids — can carry a
+	// same-value DefID. See previewFootnoteDefIDs.
+	footnoteDefID map[int]string
+}
+
+// contentHashID computes the content-hash form of a block id —
+// hex(sha256(src[span.StartOffset:span.EndOffset]))[:16] — when src and
+// span support it. It is a pure function of src+span (no ordinal
+// dependency), which is what lets previewFootnoteDefIDs compute it
+// ahead of the document-order traversal that assigns fallback ids.
+func contentHashID(src []byte, span document.Span) (string, bool) {
+	if len(src) > 0 && !span.IsZero() &&
+		span.StartOffset >= 0 && span.StartOffset <= span.EndOffset && span.EndOffset <= len(src) {
+		sum := sha256.Sum256(src[span.StartOffset:span.EndOffset])
+		return hex.EncodeToString(sum[:8]), true
+	}
+	return "", false
+}
+
+// previewFootnoteDefIDs computes, ahead of the main build traversal,
+// the block id each footnote definition's eventual Footnote entry will
+// carry — so FootnoteRef.DefID (set while walking the document body,
+// before any footnote definition is actually emitted) can carry the
+// matching value. Only resolvable in the content-hash case (Source
+// provided and the definition has a real span): the fallback
+// kind+ordinal id depends on the ordinal position definitions are
+// emitted at in the trailing footnotes loop, which isn't known yet
+// here, so those entries are simply omitted — FootnoteRef.DefID stays
+// "" for them, and hosts fall back to Tree.FootnoteByIndex. This never
+// touches builder.ordinal, so it cannot perturb any other block's
+// fallback id.
+func previewFootnoteDefIDs(src []byte, fns []derive.Footnote) map[int]string {
+	if len(fns) == 0 {
+		return nil
+	}
+	ids := make(map[int]string, len(fns))
+	for _, fn := range fns {
+		if id, ok := contentHashID(src, fn.Def.Span()); ok {
+			ids[fn.Def.Index] = id
+		}
+	}
+	return ids
 }
 
 // id derives a block's identity: the content hash of its span's source
@@ -97,11 +143,8 @@ type builder struct {
 func (b *builder) id(kind document.Kind, span document.Span) string {
 	ord := b.ordinal
 	b.ordinal++
-	src := b.opts.Source
-	if len(src) > 0 && !span.IsZero() &&
-		span.StartOffset >= 0 && span.StartOffset <= span.EndOffset && span.EndOffset <= len(src) {
-		sum := sha256.Sum256(src[span.StartOffset:span.EndOffset])
-		return hex.EncodeToString(sum[:8])
+	if id, ok := contentHashID(b.opts.Source, span); ok {
+		return id
 	}
 	// The fallback preimage is domain-separated from the content-hash
 	// form (which hashes raw span bytes): without the prefix, a block
@@ -315,7 +358,7 @@ func (b *builder) inline(n document.Node) Inline {
 		html, unsafe := b.rawHTML(n.HTML)
 		return &HTMLInline{Span: span, HTML: html, Unsafe: unsafe}
 	case *document.FootnoteRef:
-		return &FootnoteRef{Index: n.Index}
+		return &FootnoteRef{Index: n.Index, DefID: b.footnoteDefID[n.Index]}
 	default:
 		return nil // unknown node: dropped
 	}

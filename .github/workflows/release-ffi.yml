@@ -8,11 +8,12 @@ env:
 jobs:
   # Artifact smoke policy (v0.8.1 hardening plan): targets the runner
   # can execute run the C harness against the freshly built library
-  # BEFORE upload — darwin-arm64 natively, darwin-amd64 under Rosetta,
-  # linux-amd64 and linux-arm64 natively on their own runners; the wasm
-  # job runs the Node harness. The rest stay build-only: windows-amd64
-  # is harness-covered per-commit by ci.yml's ffi job, and ios/android
-  # have no hosted runner that can execute those binaries at all.
+  # BEFORE upload — darwin-arm64, linux-amd64, linux-arm64, and
+  # windows-arm64 natively on their own runners, darwin-amd64 under
+  # Rosetta; the wasm job runs the Node harness. The rest stay
+  # build-only: windows-amd64 is harness-covered per-commit by ci.yml's
+  # ffi job, and ios/android have no hosted runner that can execute
+  # those binaries at all.
   build:
     strategy:
       matrix:
@@ -25,6 +26,12 @@ jobs:
           - {os: ubuntu-latest, target: linux-amd64}
           - {os: ubuntu-24.04-arm, target: linux-arm64}
           - {os: windows-latest, target: windows-amd64}
+          # windows-11-arm is a GA hosted arm64 Windows runner (GNU
+          # gcc/binutils preinstalled) — a native cgo build, no
+          # cross-compilation needed; scripts/build-ffi.sh already
+          # derives goos/goarch generically, so no script change was
+          # required to add this target.
+          - {os: windows-11-arm, target: windows-arm64}
     runs-on: ${{ matrix.os }}
     defaults:
       run: {shell: bash}
@@ -41,14 +48,18 @@ jobs:
           CC: ${{ matrix.cc }}
         run: VERSION="$TAG" ./scripts/build-ffi.sh
       - name: Smoke test (native)
-        if: matrix.target == 'darwin-arm64' || matrix.target == 'linux-amd64' || matrix.target == 'linux-arm64'
+        if: matrix.target == 'darwin-arm64' || matrix.target == 'linux-amd64' || matrix.target == 'linux-arm64' || matrix.target == 'windows-arm64'
         run: |
           target="${{ matrix.target }}"
           dir="dist/ffi/$target"
-          gcc examples/c/harness.c -I"$dir" -L"$dir" -lmdviewer -o harness
-          if [[ "$target" == darwin-* ]]; then
+          if [[ "$target" == windows-* ]]; then
+            gcc examples/c/harness.c -I"$dir" -L"$dir" -lmdviewer -o harness.exe
+            PATH="$dir:$PATH" ./harness.exe
+          elif [[ "$target" == darwin-* ]]; then
+            gcc examples/c/harness.c -I"$dir" -L"$dir" -lmdviewer -o harness
             DYLD_LIBRARY_PATH="$dir" ./harness
           else
+            gcc examples/c/harness.c -I"$dir" -L"$dir" -lmdviewer -o harness
             LD_LIBRARY_PATH="$dir" ./harness
           fi
       - name: Smoke test (darwin-amd64 under Rosetta)
@@ -185,7 +196,7 @@ jobs:
 
   # Aggregates every job's per-zip checksum into one SHA256SUMS file
   # (standard `sha256sum` format, sorted by filename) and uploads it as
-  # the release's 9th asset, so consumers can `sha256sum -c` downloads.
+  # the release's 10th asset, so consumers can `sha256sum -c` downloads.
   checksums:
     needs: [build, wasm, ios, android]
     runs-on: ubuntu-latest
@@ -203,9 +214,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           cat sums/*.sha256 | LC_ALL=C sort -k2 > SHA256SUMS
-          # One line per shipped zip: 5 build-matrix targets + wasm +
+          # One line per shipped zip: 6 build-matrix targets + wasm +
           # ios + android. A mismatch means a job stopped uploading its
           # checksum — fail loudly rather than publish a partial file.
-          test "$(wc -l < SHA256SUMS)" -eq 8
+          test "$(wc -l < SHA256SUMS)" -eq 9
           cat SHA256SUMS
           gh release upload "$TAG" SHA256SUMS --clobber

@@ -9,6 +9,9 @@ func TestAssetsNonEmpty(t *testing.T) {
 	if len(MermaidJS()) < 1_000_000 {
 		t.Errorf("mermaid suspiciously small: %d", len(MermaidJS()))
 	}
+	if bridge := MermaidBridgeJS(); !strings.Contains(bridge, "mdvRenderMermaid") {
+		t.Errorf("mermaid bridge missing mdvRenderMermaid: %q", bridge)
+	}
 	if len(KatexJS()) < 100_000 {
 		t.Errorf("katex js suspiciously small: %d", len(KatexJS()))
 	}

@@ -278,6 +278,22 @@ type Footnote struct {
 	Blocks   []Block
 }
 
+// FootnoteByIndex returns the footnote definition in t.Footnotes whose
+// Index matches index (typically a [FootnoteRef].Index), so a host can
+// resolve a reference to its definition's ID/Span/Blocks — e.g. for
+// scroll-to-definition — without walking source line numbers. Unlike
+// [FootnoteRef].DefID, this always works regardless of Options.Source.
+// Reports ok=false when no definition with that index exists (e.g. a
+// hand-built tree with mismatched refs).
+func (t *Tree) FootnoteByIndex(index int) (Footnote, bool) {
+	for _, fn := range t.Footnotes {
+		if fn.Index == index {
+			return fn, true
+		}
+	}
+	return Footnote{}, false
+}
+
 // Text is a literal text run (emoji shortcodes already substituted by
 // the parser).
 // Wire: {"kind":"text",span,"value"}.
@@ -379,9 +395,22 @@ type HTMLInline struct {
 // FootnoteRef is a footnote reference site; Index pairs it with the
 // envelope [Footnote] carrying the same index. It never carries a span
 // (the parser records none).
-// Wire: {"kind":"footnoteRef","index"}.
+//
+// DefID is the definition's block id (the same value as the matching
+// [Footnote].ID) — an explicit ref→definition linkage so a host can
+// jump straight to the definition it should key/scroll to, without
+// scanning Tree.Footnotes by Index or reconstructing the link from
+// source line numbers. It is only populated when that id is knowable
+// before the definition itself is built, which requires
+// Options.Source and a real (non-zero) definition span — the same
+// precondition content-hash block ids need in general (see "Block
+// identity"); otherwise it is "" (omitted on the wire), and hosts fall
+// back to [Tree.FootnoteByIndex], which always works regardless of
+// Source.
+// Wire: {"kind":"footnoteRef","index",("defId")}.
 type FootnoteRef struct {
 	Index int
+	DefID string // "" (omitted) when not resolvable ahead of build; see doc above
 }
 
 func (*Heading) isBlock()        {}

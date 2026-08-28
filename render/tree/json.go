@@ -204,6 +204,7 @@ type (
 	wFootnoteRef struct {
 		Kind  string `json:"kind"`
 		Index int    `json:"index"`
+		DefID string `json:"defId,omitempty"`
 	}
 )
 
@@ -395,7 +396,7 @@ func inlineOut(i Inline) (any, error) {
 		return &wHTMLInline{wIHead: ihead(document.KindHTMLInline, i.Span),
 			HTML: i.HTML, Unsafe: i.Unsafe}, nil
 	case *FootnoteRef:
-		return &wFootnoteRef{Kind: document.KindFootnoteRef.String(), Index: i.Index}, nil
+		return &wFootnoteRef{Kind: document.KindFootnoteRef.String(), Index: i.Index, DefID: i.DefID}, nil
 	default:
 		return nil, fmt.Errorf("tree: unencodable inline type %T", i)
 	}

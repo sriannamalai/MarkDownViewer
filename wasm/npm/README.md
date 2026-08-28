@@ -193,6 +193,10 @@ mdv.render(md, {
 fragment-mode hosts can enable diagrams, math, and syntax highlighting
 without vendoring anything — `mermaid.js`, `katex.js`, `katex.css`,
 `base.css`, `theme-light.css`, `theme-dark.css` — plus
+`mermaid-bridge.js` (`mdvRenderMermaid(id, source, theme)`, an
+offscreen-render primitive for hosts with no visible DOM to let
+mermaid's `startOnLoad` scan; see `ffi/README.md`'s "Mermaid offscreen
+rendering" section for the full contract), and
 `theme-light.json` / `theme-dark.json`, the theme palette as version-1
 JSON data for native/custom renderers, and `highlight-light.json` /
 `highlight-dark.json`, the syntax-highlight token colors and font
