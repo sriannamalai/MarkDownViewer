@@ -7,6 +7,64 @@ This project is pre-1.0 (see `docs/Design.md`'s Status section); until
 v1.0.0, minor version bumps may include breaking changes to the `document`
 model and renderer options.
 
+## [0.11.0] - 2026-08-28
+
+The Phase 1 gap-train of the cross-repo rendering-engine synchronization
+effort: closes the three roadmap items blocking Mobile's native-reader
+story (CRLF highlighting, footnote jump-to-definition, Mermaid
+direction), plus a small additive Flutter plugin API Mobile needed to
+actually wire footnote taps up. All additive; no wire schema version
+bump (render tree stays version 1).
+
+### Fixed
+
+- **CRLF code fences now highlight correctly** (previously fail-closed).
+  Chroma's lexers normalize CRLF/CR line endings to LF before
+  tokenising; `render/html`'s `TokenRuns` now redoes that normalization
+  locally and re-expands the resulting runs back to the source's exact
+  CRLF/CR bytes, instead of declining the fence outright. `render/tree`
+  code blocks inherit the fix transparently through the shared
+  `htmlrender.TokenRuns` seam — no `render/tree` code change was needed.
+
+### Added
+
+- **Footnote jump-to-definition primitive** (`render/tree`): `FootnoteRef`
+  gains an optional `DefID` field (wire: `"defId"`, omitempty) carrying
+  the matching `Footnote`'s block id, so native hosts can jump straight
+  to a footnote's definition without inventing line-based heuristics.
+  `Tree` gains a `FootnoteByIndex(index)` lookup helper that always
+  resolves a definition by index regardless of whether `Options.Source`
+  was set. Both are populated consistently across the `renderTree(md)`
+  and `renderTreeDoc(parse(md))` build paths.
+- **`mermaid-bridge.js` asset** — a first-cut primitive for hosts with
+  only an offscreen/headless webview (no on-screen page for Mermaid's
+  `startOnLoad` scan to find). Defines one function,
+  `mdvRenderMermaid(id, source, theme)`, wrapping
+  `mermaid.initialize`/`mermaid.render` behind a single promise-based
+  call that never throws. Reachable from every surface via the shared
+  asset registry (`mdv_asset`/`asset()`/Flutter's `Mdviewer.instance.asset()`).
+  Offscreen-SVG generation itself stays a host-side (webview)
+  responsibility, not a Go-side rendering pipeline — see the rationale
+  captured in this train's design note.
+- **`MdvFootnoteRefTapCallback` / `onFootnoteRefTap`** (`flutter/mdviewer`):
+  `MdvRenderScope`, `MdvDocumentAdapter`, and `MdvDocumentView` all gain
+  an optional `onFootnoteRefTap(index)` callback, mirroring `onLinkTap`
+  exactly. Previously a footnote reference marker rendered as inert
+  plain text with no way for a host to intercept a tap at all; null
+  keeps that same inert rendering, so this is purely additive.
+- **windows-arm64** joins the `release-ffi.yml` build matrix via the
+  GA `windows-11-arm` hosted GitHub Actions runner — a native cgo
+  build, no cross-compilation. `libmdviewer` now ships six desktop
+  targets (was five).
+
+### Changed
+
+- `AGENTS.md`: records the finalized cross-repo architectural
+  specialization (Mobile = native render-tree + dual-engine flagship,
+  Desktop = HTML/webview flagship; this library does not push either
+  app toward convergence) and adds an "Engine version sync" checklist
+  to run on every core release.
+
 ## [0.10.1] - 2026-08-14
 
 Flutter plugin only — no library artifacts; the plugin runs against the

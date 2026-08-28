@@ -12,9 +12,10 @@ into self-contained, sanitized HTML — and, since v0.10, into a native
 rendering core, five consumption surfaces: Go package, CLI (`cmd/mdview`),
 C ABI (`libmdviewer`), WASM, and a Flutter plugin (`flutter/mdviewer`).
 
-Current version: **v0.10.1** (pre-1.0, API not frozen). 154 commits.
-Latest tags: v0.9.0, v0.10.0 (+ `flutter-v0.10.0`, `flutter-v0.10.1` for the
-plugin). See `CHANGELOG.md` for full release notes and `docs/Design.md` for
+Current version: **v0.11.0** (pre-1.0, API not frozen). 158 commits.
+Latest tags: v0.10.0, v0.11.0 (+ `flutter-v0.10.0`, `flutter-v0.10.1` for the
+plugin; `flutter-v0.11.0` pending — see the Engine version sync checklist
+below). See `CHANGELOG.md` for full release notes and `docs/Design.md` for
 the authoritative architecture doc — **read that file first** for anything
 non-trivial; this AGENTS.md summarizes it plus adds cross-repo context.
 
@@ -125,6 +126,14 @@ Security model: sanitize-by-default (bluemonday), URL scheme allowlist
   `renderTree`/`renderTreeDoc`; Flutter typed model + `MdvDocumentView`
   native widget renderer with native math; `MdvDocumentAdapter` (v0.10.1)
   exposing list assembly for host-owned scrollables + line-mapping helpers.
+- v0.11.0: the sync-plan Phase 1 gap-train — CRLF code-fence highlighting
+  fixed (was fail-closed); footnote jump-to-definition primitive
+  (`FootnoteRef.DefID` / `Tree.FootnoteByIndex`); `mermaid-bridge.js` asset
+  (`mdvRenderMermaid`) for offscreen-webview hosts; `onFootnoteRefTap` on
+  the Flutter plugin's render scope/adapter/view; windows-arm64 added to
+  the release build matrix (six desktop targets). Finalized and recorded
+  the cross-repo architectural specialization + Engine version sync
+  checklist (below).
 
 ## Known limitations / open items (roadmap toward v1.0)
 From `docs/Design.md`'s Roadmap section, in rough order:

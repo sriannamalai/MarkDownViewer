@@ -483,17 +483,30 @@ render tree" section above. Known v0.10 limits: footnote refs are
 superscript-only (no jump-to-definition — needs scroll-controller work),
 and mermaid renders as a pluggable placeholder.
 
+v0.11.0 closed the first two of those v0.10 limits from the library
+side (a cross-repo rendering-engine synchronization effort's Phase 1):
+a footnote ref→definition linkage (`FootnoteRef.DefID` /
+`Tree.FootnoteByIndex`) so a host can jump to a definition without a
+scroll-controller-free heuristic, and `mermaid-bridge.js`, a first-cut
+asset primitive (`mdvRenderMermaid`) for a host's own offscreen webview
+to turn Mermaid source into real SVG — offscreen-SVG generation itself
+stays a host-side responsibility, not a Go-side pipeline (see the
+train's design note). Also fixed: CRLF/CR-terminated code fences no
+longer decline native token runs. No wire schema change (tree stays
+version 1).
+
 Toward v1.0, what remains, roughly in order:
 
-1. **Mobile native reader validation** — the MDViewer.Mobile app grows a
-   native reader mode against released v0.10.0 artifacts, the same
-   app-validates-library pattern that hardened the v0.7 plugin. Expected
-   to feed back small tree/widget gaps (footnote jump-to-definition via
-   a scroll controller among them).
-2. **Mermaid offscreen-SVG fast-follow** — an offscreen-webview→SVG
-   service so diagrams render natively-embeddable SVG instead of the
-   placeholder; prototyped in the Mobile app first, then folded back as
-   the plugin's default diagram builder if it earns it.
+1. **Mobile native reader validation** — the MDViewer.Mobile app's
+   native reader consumes the v0.11.0 primitives above; expected to keep
+   feeding back smaller tree/widget gaps as it does (e.g. Mobile's own
+   scroll-controller work to jump to a footnote definition on tap, not
+   just its containing footnotes section).
+2. **Mermaid rendering polish** — fold `mermaid-bridge.js` into the
+   Flutter plugin's default `diagram` builder if the Mobile prototype
+   earns it; still no headless-rendering dependency inside the Go
+   library itself (see "The native render tree" and the v0.11.0 note
+   above for why).
 3. **The 1.0-freeze discussion** — the `document` model, options JSON,
    C ABI, and now the tree schema have all been shaped by real hosts;
    deciding what freezes (and what stays explicitly unfrozen) is its own
