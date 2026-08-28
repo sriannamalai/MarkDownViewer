@@ -23,6 +23,13 @@ typedef MdvLinkTapCallback =
 typedef MdvImageResolver =
     Future<ImageProvider?> Function(String url, String alt);
 
+/// Tap callback for a footnote reference marker (wire kind
+/// `footnoteRef`): [index] is the tapped [MdvFootnoteRef.index],
+/// matching the [MdvFootnoteDef] a host should scroll/jump to. Null
+/// renders every reference marker inert (the pre-existing default —
+/// superscript-only, no tap affordance).
+typedef MdvFootnoteRefTapCallback = void Function(int index);
+
 /// A per-kind block builder override: receives the typed [node] and the
 /// [defaultChild] the built-in builder produced, and returns the widget
 /// to show instead (wrap, replace, or return [defaultChild] untouched).
@@ -95,6 +102,7 @@ class MdvRenderScope {
     required this.palette,
     this.builders = const MdvBuilders(),
     this.onLinkTap,
+    this.onFootnoteRefTap,
     this.imageProvider,
     this.selectable = true,
     required this.baseStyle,
@@ -103,6 +111,9 @@ class MdvRenderScope {
   final MdvPalette palette;
   final MdvBuilders builders;
   final MdvLinkTapCallback? onLinkTap;
+
+  /// Tap callback for a footnote reference marker; null keeps it inert.
+  final MdvFootnoteRefTapCallback? onFootnoteRefTap;
   final MdvImageResolver? imageProvider;
   final bool selectable;
 
@@ -115,6 +126,7 @@ class MdvRenderScope {
     palette: palette,
     builders: builders,
     onLinkTap: onLinkTap,
+    onFootnoteRefTap: onFootnoteRefTap,
     imageProvider: imageProvider,
     selectable: selectable,
     baseStyle: style,
