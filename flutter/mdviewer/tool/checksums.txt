@@ -20,3 +20,5 @@ a7712dd891749bb5d632ea22efc556d3e9b2f706cde53d48675cff4c336c8914  libmdviewer-0.
 ef88cf00dc52471da4162bed175f0d8cd7d2dad09541ac9abb454a166371f08b  libmdviewer-0.9.0-android.zip
 992eae95474324fc7ab4bdbbbd714e8ae515f43045cdc4e2db8123bfa8302d34  libmdviewer-0.10.0-ios.xcframework.zip
 71eb62c5979ae0de653743afc4299503f46c092f00c5dc799726101f3106976d  libmdviewer-0.10.0-android.zip
+a6cbac7a7be77496444c602e16891d82c96ee8b701af9c0e3fd1cc064a859189  libmdviewer-0.11.0-ios.xcframework.zip
+8643560dbde667ed6727c50a8e82cb1b45f5d5e3570e437d11d3215326139298  libmdviewer-0.11.0-android.zip
