@@ -26,12 +26,16 @@ jobs:
           - {os: ubuntu-latest, target: linux-amd64}
           - {os: ubuntu-24.04-arm, target: linux-arm64}
           - {os: windows-latest, target: windows-amd64}
-          # windows-11-arm is a GA hosted arm64 Windows runner (GNU
-          # gcc/binutils preinstalled) — a native cgo build, no
-          # cross-compilation needed; scripts/build-ffi.sh already
-          # derives goos/goarch generically, so no script change was
-          # required to add this target.
-          - {os: windows-11-arm, target: windows-arm64}
+          # windows-11-arm is a GA hosted arm64 Windows runner, but its
+          # default `gcc`/`as` in PATH cannot assemble genuine ARM64 GNU
+          # assembly (verified: the v0.11.0 release run failed cgo's
+          # runtime/cgo build with "no such instruction" errors from
+          # gcc_arm64.S) — it targets a different arch by default. A
+          # native cgo build still works, but needs an explicit
+          # aarch64-w64-mingw32 toolchain (llvm-mingw); see the "Install
+          # ARM64 C toolchain" step below. scripts/build-ffi.sh itself
+          # needed no change (already derives goos/goarch generically).
+          - {os: windows-11-arm, target: windows-arm64, cc: aarch64-w64-mingw32-clang}
     runs-on: ${{ matrix.os }}
     defaults:
       run: {shell: bash}
@@ -40,6 +44,26 @@ jobs:
         with: {ref: '${{ github.event.release.tag_name }}'}
       - uses: actions/setup-go@v6
         with: {go-version: '1.26.x'}
+      # cgo needs a real aarch64-targeting C compiler; the runner's own
+      # gcc/clang do not fill that role (see the matrix comment above).
+      # Pinned, checksum-verified llvm-mingw ships a native ARM64-host
+      # toolchain targeting aarch64-w64-mingw32 — nothing is emulated.
+      # Only adds its bin dir to PATH; matrix.cc supplies the compiler
+      # name so later steps (Smoke test) can reuse the same value.
+      - name: Install ARM64 C toolchain (Windows ARM64)
+        if: matrix.target == 'windows-arm64'
+        shell: pwsh
+        run: |
+          $ver = "20260826"
+          $pkg = "llvm-mingw-$ver-ucrt-aarch64"
+          $sha256 = "dbce5a314c44cf44d02ab0d0e6bce948955b46429274df25544f9cfea4986f7b"
+          Invoke-WebRequest "https://github.com/mstorsjo/llvm-mingw/releases/download/$ver/$pkg.zip" -OutFile "$env:RUNNER_TEMP\llvm-mingw.zip"
+          $actual = (Get-FileHash "$env:RUNNER_TEMP\llvm-mingw.zip" -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $sha256) { throw "checksum mismatch: got $actual want $sha256" }
+          Expand-Archive "$env:RUNNER_TEMP\llvm-mingw.zip" -DestinationPath "C:\" -Force
+          $bin = "C:\$pkg\bin"
+          if (-not (Test-Path "$bin\aarch64-w64-mingw32-clang.exe")) { throw "llvm-mingw layout unexpected: $bin" }
+          echo $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       # Empty GOARCH/CC (targets without matrix overrides) are treated as
       # unset by the Go toolchain, so the native build is unaffected.
       - name: Build
@@ -52,8 +76,10 @@ jobs:
         run: |
           target="${{ matrix.target }}"
           dir="dist/ffi/$target"
+          cc="${{ matrix.cc }}"
+          cc="${cc:-gcc}"
           if [[ "$target" == windows-* ]]; then
-            gcc examples/c/harness.c -I"$dir" -L"$dir" -lmdviewer -o harness.exe
+            "$cc" examples/c/harness.c -I"$dir" -L"$dir" -lmdviewer -o harness.exe
             PATH="$dir:$PATH" ./harness.exe
           elif [[ "$target" == darwin-* ]]; then
             gcc examples/c/harness.c -I"$dir" -L"$dir" -lmdviewer -o harness
