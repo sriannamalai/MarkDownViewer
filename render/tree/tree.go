@@ -278,6 +278,22 @@ type Footnote struct {
 	Blocks   []Block
 }
 
+// FootnoteByIndex returns the footnote definition in t.Footnotes whose
+// Index matches index (typically a [FootnoteRef].Index), so a host can
+// resolve a reference to its definition's ID/Span/Blocks — e.g. for
+// scroll-to-definition — without walking source line numbers. Unlike
+// [FootnoteRef].DefID, this always works regardless of Options.Source.
+// Reports ok=false when no definition with that index exists (e.g. a
+// hand-built tree with mismatched refs).
+func (t *Tree) FootnoteByIndex(index int) (Footnote, bool) {
+	for _, fn := range t.Footnotes {
+		if fn.Index == index {
+			return fn, true
+		}
+	}
+	return Footnote{}, false
+}
+
 // Text is a literal text run (emoji shortcodes already substituted by
 // the parser).
 // Wire: {"kind":"text",span,"value"}.
@@ -379,9 +395,25 @@ type HTMLInline struct {
 // FootnoteRef is a footnote reference site; Index pairs it with the
 // envelope [Footnote] carrying the same index. It never carries a span
 // (the parser records none).
-// Wire: {"kind":"footnoteRef","index"}.
+//
+// DefID is the definition's block id (the same value as the matching
+// [Footnote].ID, whether that id is a content hash or a positional
+// fallback) — an explicit ref→definition linkage so a host can jump
+// straight to the definition it should key/scroll to, without scanning
+// Tree.Footnotes by Index or reconstructing the link from source line
+// numbers. Populated for every ref whose Index matches a definition in
+// the same Tree, regardless of Options.Source — this is consistent
+// whether the tree came from markdown directly or from previously
+// parsed document JSON (a document.Document has no source bytes on
+// that path, so ordinary block ids there are the positional fallback
+// form, and DefID matches that same fallback value). It is "" (omitted
+// on the wire) only for a ref with no matching definition at all (a
+// hand-built tree with a stray/mismatched Index). [Tree.FootnoteByIndex]
+// performs the equivalent lookup directly against Tree.Footnotes.
+// Wire: {"kind":"footnoteRef","index",("defId")}.
 type FootnoteRef struct {
 	Index int
+	DefID string // "" (omitted) only when no definition has a matching Index
 }
 
 func (*Heading) isBlock()        {}

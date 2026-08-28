@@ -312,7 +312,10 @@ func TestConcurrentTokenRuns(t *testing.T) {
 
 // TestNormalizeRunsTrailingNewline pins the EnsureNL trim rule directly:
 // an appended trailing newline is trimmed off (dropping a run that was
-// only the newline), anything else fails closed.
+// only the newline), anything else fails closed. normalizeRuns itself
+// has no CRLF awareness — that re-normalization happens one layer up in
+// TokenRuns (see TestTokenRunsCRLF) — so a target that still contains
+// raw CRLF bytes must fail closed here.
 func TestNormalizeRunsTrailingNewline(t *testing.T) {
 	// Appended '\n' inside the final run's text.
 	runs, ok := normalizeRuns([]TokenRun{{Text: "x", TokenType: "Text"}, {Text: "y\n", TokenType: "Text"}}, "xy\n", "xy")
@@ -326,6 +329,66 @@ func TestNormalizeRunsTrailingNewline(t *testing.T) {
 	}
 	// Any other divergence fails closed.
 	if _, ok = normalizeRuns([]TokenRun{{Text: "a\nb", TokenType: "Text"}}, "a\nb", "a\r\nb"); ok {
-		t.Fatal("CRLF rewrite must fail closed")
+		t.Fatal("raw CRLF target must fail closed at this layer")
+	}
+}
+
+// TestTokenRunsCRLF pins the fix for CRLF-terminated fences: TokenRuns
+// must succeed (not fail closed) and the concatenation of the returned
+// runs' Text must reproduce the CRLF/CR source byte-for-byte, including
+// when a lone \r (no paired \n) or a trailing \r/\r\n triggers chroma's
+// EnsureNL append.
+func TestTokenRunsCRLF(t *testing.T) {
+	withFreshRunsCache(t, runsCacheMaxBytes)
+	cases := []string{
+		"x := 1\r\ny := 2\r\n",       // plain CRLF fence
+		"x := 1\ry := 2\r",           // lone CR line endings
+		"x := 1\r\ny := 2",           // no trailing newline (EnsureNL appends one)
+		"x := 1\r\n// c\r\ny := 2\r", // mixed CRLF and lone CR
+	}
+	for _, code := range cases {
+		runs, ok := TokenRuns(code, "go")
+		if !ok {
+			t.Fatalf("TokenRuns failed closed for CRLF code %q", code)
+		}
+		var b strings.Builder
+		for _, r := range runs {
+			if r.Text == "" {
+				t.Errorf("code %q: empty run emitted", code)
+			}
+			b.WriteString(r.Text)
+		}
+		if b.String() != code {
+			t.Errorf("code %q: concatenation diverges\n got %q\nwant %q", code, b.String(), code)
+		}
+	}
+}
+
+// TestCrlfToLF pins crlfToLF's normalization and offset mapping
+// directly against chroma's documented EnsureLF behavior.
+func TestCrlfToLF(t *testing.T) {
+	cases := []struct{ in, wantNorm string }{
+		{"a\r\nb", "a\nb"},
+		{"a\rb", "a\nb"},
+		{"a\r", "a\n"},
+		{"a\r\n", "a\n"},
+		{"no cr", "no cr"},
+	}
+	for _, tc := range cases {
+		norm, offs := crlfToLF(tc.in)
+		if norm != tc.wantNorm {
+			t.Errorf("crlfToLF(%q) norm = %q, want %q", tc.in, norm, tc.wantNorm)
+		}
+		if len(offs) != len(norm)+1 {
+			t.Errorf("crlfToLF(%q) offs len = %d, want %d", tc.in, len(offs), len(norm)+1)
+		}
+		if offs[len(offs)-1] != len(tc.in) {
+			t.Errorf("crlfToLF(%q) final offset = %d, want %d", tc.in, offs[len(offs)-1], len(tc.in))
+		}
+		// Re-expanding the whole norm as one run must reproduce in exactly.
+		restored := restoreCRLF([]TokenRun{{Text: norm}}, offs, tc.in)
+		if restored[0].Text != tc.in {
+			t.Errorf("restoreCRLF(%q) = %q, want %q", tc.in, restored[0].Text, tc.in)
+		}
 	}
 }

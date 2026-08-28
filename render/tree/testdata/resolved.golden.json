@@ -498,7 +498,8 @@
         },
         {
           "kind": "footnoteRef",
-          "index": 1
+          "index": 1,
+          "defId": "5fe1bd686b7b3041"
         },
         {
           "kind": "text",
@@ -512,7 +513,8 @@
         },
         {
           "kind": "footnoteRef",
-          "index": 1
+          "index": 1,
+          "defId": "5fe1bd686b7b3041"
         },
         {
           "kind": "text",
@@ -526,7 +528,8 @@
         },
         {
           "kind": "footnoteRef",
-          "index": 2
+          "index": 2,
+          "defId": "a9057449b07f2a53"
         },
         {
           "kind": "text",

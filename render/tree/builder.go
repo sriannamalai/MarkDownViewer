@@ -80,12 +80,46 @@ func Build(doc *document.Document, opts Options) (*Tree, error) {
 			Blocks:   b.blocks(def),
 		})
 	}
+	// Backfill FootnoteRef.DefID now that every Footnote has its real id
+	// (content-hash or fallback) — refs were built earlier, while
+	// walking the document body, before any definition was emitted, so
+	// the value couldn't be known at construction time. This works
+	// identically regardless of Options.Source: the parity a host
+	// expects between renderTree(md) and renderTreeDoc(parse(md)) is
+	// that DefID is populated whenever the matching Footnote.ID is
+	// (fallback ids included), not just in the content-hash case.
+	if len(b.footnoteRefs) > 0 {
+		defByIndex := make(map[int]string, len(t.Footnotes))
+		for _, fn := range t.Footnotes {
+			defByIndex[fn.Index] = fn.ID
+		}
+		for _, ref := range b.footnoteRefs {
+			ref.DefID = defByIndex[ref.Index] // "" for a stray ref with no matching def
+		}
+	}
 	return t, nil
 }
 
 type builder struct {
 	opts    Options
 	ordinal int // document-order count of every emitted block (items and footnotes included)
+
+	// footnoteRefs collects every *FootnoteRef built while walking the
+	// document body, so Build can backfill their DefID once every
+	// Footnote's real id is known (see the comment in Build).
+	footnoteRefs []*FootnoteRef
+}
+
+// contentHashID computes the content-hash form of a block id —
+// hex(sha256(src[span.StartOffset:span.EndOffset]))[:16] — when src and
+// span support it.
+func contentHashID(src []byte, span document.Span) (string, bool) {
+	if len(src) > 0 && !span.IsZero() &&
+		span.StartOffset >= 0 && span.StartOffset <= span.EndOffset && span.EndOffset <= len(src) {
+		sum := sha256.Sum256(src[span.StartOffset:span.EndOffset])
+		return hex.EncodeToString(sum[:8]), true
+	}
+	return "", false
 }
 
 // id derives a block's identity: the content hash of its span's source
@@ -97,11 +131,8 @@ type builder struct {
 func (b *builder) id(kind document.Kind, span document.Span) string {
 	ord := b.ordinal
 	b.ordinal++
-	src := b.opts.Source
-	if len(src) > 0 && !span.IsZero() &&
-		span.StartOffset >= 0 && span.StartOffset <= span.EndOffset && span.EndOffset <= len(src) {
-		sum := sha256.Sum256(src[span.StartOffset:span.EndOffset])
-		return hex.EncodeToString(sum[:8])
+	if id, ok := contentHashID(b.opts.Source, span); ok {
+		return id
 	}
 	// The fallback preimage is domain-separated from the content-hash
 	// form (which hashes raw span bytes): without the prefix, a block
@@ -315,7 +346,9 @@ func (b *builder) inline(n document.Node) Inline {
 		html, unsafe := b.rawHTML(n.HTML)
 		return &HTMLInline{Span: span, HTML: html, Unsafe: unsafe}
 	case *document.FootnoteRef:
-		return &FootnoteRef{Index: n.Index}
+		ref := &FootnoteRef{Index: n.Index}
+		b.footnoteRefs = append(b.footnoteRefs, ref)
+		return ref
 	default:
 		return nil // unknown node: dropped
 	}

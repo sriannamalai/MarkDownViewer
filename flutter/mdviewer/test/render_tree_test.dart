@@ -105,13 +105,18 @@ List<MdvInline> _allInlines(List<MdvBlock> blocks) {
   return out;
 }
 
-/// [v] with every map's "id" entry removed, recursively — for comparing
-/// trees whose ids are expected to differ (content-hash vs positional).
+/// [v] with every map's "id" AND "defId" entries removed, recursively —
+/// for comparing trees whose ids are expected to differ (content-hash
+/// vs positional fallback). "defId" (a footnoteRef's ref→definition
+/// linkage) is exactly as id-shaped as "id" itself — it carries the
+/// matching footnote definition's id, so it diverges in VALUE between
+/// the two build paths for the same reason "id" does, even though both
+/// surfaces populate it (see the parity test below).
 Object? _stripIds(Object? v) {
   if (v is Map<String, dynamic>) {
     return {
       for (final e in v.entries)
-        if (e.key != 'id') e.key: _stripIds(e.value),
+        if (e.key != 'id' && e.key != 'defId') e.key: _stripIds(e.value),
     };
   }
   if (v is List) return [for (final x in v) _stripIds(x)];
@@ -125,6 +130,24 @@ List<String> _collectIds(Object? v) {
     if (v is Map<String, dynamic>) {
       final id = v['id'];
       if (id is String) out.add(id);
+      v.values.forEach(go);
+    } else if (v is List) {
+      v.forEach(go);
+    }
+  }
+
+  go(v);
+  return out;
+}
+
+/// Every non-empty "defId" value found anywhere in the raw wire tree
+/// [v] (a footnoteRef's ref→definition linkage).
+List<String> _collectDefIds(Object? v) {
+  final out = <String>[];
+  void go(Object? v) {
+    if (v is Map<String, dynamic>) {
+      final defId = v['defId'];
+      if (defId is String && defId.isNotEmpty) out.add(defId);
       v.values.forEach(go);
     } else if (v is List) {
       v.forEach(go);
@@ -234,6 +257,24 @@ void main() {
     final hex16 = RegExp(r'^[0-9a-f]{16}$');
     for (final id in [..._collectIds(fromMd), ..._collectIds(fromDoc)]) {
       expect(id, matches(hex16));
+    }
+    // The footnote ref->definition linkage (defId) is populated on
+    // BOTH surfaces — not just the content-hash (markdown) path — and
+    // every value matches a real footnote definition's id in that same
+    // tree, even though the concrete id values differ between the two
+    // surfaces (content hash vs positional fallback, like every other
+    // id).
+    final mdFootnoteIds = _collectIds((fromMd['footnotes'] as List));
+    final docFootnoteIds = _collectIds((fromDoc['footnotes'] as List));
+    final mdDefIds = _collectDefIds(fromMd);
+    final docDefIds = _collectDefIds(fromDoc);
+    expect(mdDefIds, isNotEmpty);
+    expect(docDefIds, isNotEmpty);
+    for (final defId in mdDefIds) {
+      expect(mdFootnoteIds, contains(defId));
+    }
+    for (final defId in docDefIds) {
+      expect(docFootnoteIds, contains(defId));
     }
     // And the typed path parses the doc-built tree too.
     expect(mdv.renderTreeDoc(doc).blocks.first, isA<MdvHeading>());

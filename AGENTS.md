@@ -27,8 +27,7 @@ it's useful to know what the others are doing:
   TypeScript) desktop app for macOS/Windows/Linux. Consumes this library
   via the **C ABI** (`libmdviewer`, vendored per-platform, currently pinned
   at **v0.8.1**). Renders documents in a sandboxed webview
-  (`<iframe sandbox>`) fed HTML from the FFI — it does **not** yet use the
-  v0.10 native render tree.
+  (`<iframe sandbox>`) fed HTML from the FFI.
 - **`~/Developer/OpenSource/MDViewer.Mobile`** — a Flutter app for
   iOS/Android. Consumes this library as a **git submodule**
   (`vendor/markdownviewer`, pinned to tag `flutter-v0.10.1`) via the
@@ -37,12 +36,47 @@ it's useful to know what the others are doing:
   default, with a Webview fallback for Mermaid diagrams and a few
   native-engine gaps.
 
+**Finalized architectural specialization** (Cross-Repo Rendering Engine
+Synchronization Plan, 2026-08): the two apps are deliberately kept
+specialized, not converged onto one rendering model — this library does
+not push either app toward adopting the other's approach.
+- **Desktop is the HTML/webview flagship.** It does not adopt the v0.10
+  native render tree, on purpose: Tauri's entire UI already runs inside a
+  system webview, so there are no native widgets to gain by switching, and
+  Desktop's HTML pipeline is already a complete showcase (live
+  interactive `mermaid.js` + KaTeX). "Desktop adopts the render tree" is
+  a closed question, not a backlog item.
+- **Mobile is the native render-tree + dual-engine flagship.** Its
+  Flutter widgets paint directly via Skia/Impeller with virtualized
+  scrolling, genuinely lighter than embedding a full platform WebView per
+  document; the Webview fallback stays as Mobile's deliberate
+  demonstration of the library's third capability (engine switching).
+
 Both apps share one design language, defined once and duplicated into each
 app's `design/TOKENS.md` (byte-identical color/typography/spacing tokens —
 if you change one, check whether the other needs the same edit). The Mobile
 app's native reader is the closest thing to a live testbed for this
 library's `render/tree` package — bugs found there often mean fixing this
 repo, then re-pinning Mobile to a new `flutter-v<ver>` tag.
+
+### Engine version sync checklist
+Run this on every core release so all three repos' pinned versions and
+rendering paths stay genuinely aligned (not just superficially matching
+version numbers):
+1. Bump `CHANGELOG.md` for the new version and land it on `main`.
+2. Tag `v<ver>` (and `flutter-v<ver>` if `flutter/mdviewer` changed) per
+   `CONTRIBUTING.md`'s Releasing section.
+3. Desktop: re-run `scripts/fetch-libmdviewer.sh`, verify
+   `vendor/checksums.txt`, bump the pinned version noted in its README.
+4. Mobile: bump the `vendor/markdownviewer` submodule to the new
+   `flutter-v<ver>` tag, re-test dual-engine parity (native vs. Webview
+   render the same document consistently).
+5. Update all three repos' `AGENTS.md` "Finished so far" sections with
+   what actually shipped.
+Current pinned versions/paths (see each repo's own `AGENTS.md` for detail):
+Desktop → C ABI v0.8.1, HTML/webview only. Mobile → submodule
+`flutter-v0.10.1` (native `v0.10.0` binaries), native render tree default
+with Webview fallback.
 
 **Practical implication:** a change here (especially to the C ABI, the
 options JSON, or `render/tree`) is not "done" from the ecosystem's
@@ -95,21 +129,28 @@ Security model: sanitize-by-default (bluemonday), URL scheme allowlist
 ## Known limitations / open items (roadmap toward v1.0)
 From `docs/Design.md`'s Roadmap section, in rough order:
 1. **Mobile native-reader validation** — feed real-world gaps back from
-   MDViewer.Mobile's native reader (footnote jump-to-definition needs a
-   scroll-controller design; tracked there).
-2. **Mermaid offscreen-SVG fast-follow** — render diagrams to real SVG
-   instead of the current placeholder box; prototype in Mobile first, then
-   fold back as the plugin's default `diagram` builder.
+   MDViewer.Mobile's native reader. The library-side primitive (footnote
+   ref→definition linkage: `FootnoteRef.DefID` / `Tree.FootnoteByIndex`,
+   see `render/tree`) has shipped; Mobile's own scroll-controller design
+   to actually jump on tap is still tracked there (Phase 2).
+2. **Mermaid offscreen-SVG fast-follow** — decided to stay a host-side
+   (webview) responsibility, not a Go-side rendering pipeline; see
+   `.superpowers/specs/2026-08-28 Mermaid Offscreen-SVG Direction.md`.
+   The library now ships a first-cut primitive, the `mermaid-bridge.js`
+   asset (`mdvRenderMermaid(id, source, theme)`), for a host's offscreen
+   webview to call; wiring it into Mobile's `diagram` builder is Phase 2.
 3. **The 1.0-freeze discussion** — decide what in `document`, the options
    JSON, the C ABI, and the tree schema freezes vs. stays explicitly open.
 4. **Incremental rendering** — only if profiling on real host workloads
    demands it; not committed to.
 
-Also documented, not roadmap items but known caveats: CRLF code fences
-decline native token runs (fail-closed, HTML path unaffected); footnote
-refs are superscript-only in the render tree (no jump-to-definition yet);
-resource exhaustion on deeply-nested lists is a documented, only partially
-mitigated gap (`Context` variants bound latency, not CPU).
+Also documented, not roadmap items but known caveats: resource exhaustion
+on deeply-nested lists is a documented, only partially mitigated gap
+(`Context` variants bound latency, not CPU). Previously listed here and
+now fixed: CRLF code fences used to decline native token runs
+(fail-closed) — `render/html`'s `TokenRuns` now re-expands chroma's
+LF-normalized tokenization back to the source's exact CRLF/CR bytes, so
+`render/tree` code blocks highlight normally.
 
 ## Build & test
 ```bash

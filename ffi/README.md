@@ -155,6 +155,7 @@ vendoring anything. Registry (append-only, case-sensitive):
 | Name | Content |
 |---|---|
 | `mermaid.js` | offline mermaid bundle |
+| `mermaid-bridge.js` | `mdvRenderMermaid(id, source, theme)` — offscreen-render primitive for hosts with no visible DOM to scan (see "Mermaid offscreen rendering" below) |
 | `katex.js` | offline KaTeX bundle |
 | `katex.css` | KaTeX CSS, all fonts inlined as data: URIs |
 | `base.css` | structural stylesheet |
@@ -188,6 +189,28 @@ Full-page output (the default) already embeds everything; you only need
 `mdv_asset` when rendering fragments into your own page. Apply one
 `theme-*.css` per document view; if you ship both and switch at
 runtime, scope them yourself. The `--md-*` variables in `theme-*.css` take effect through `base.css`'s rules — apply both for full styling; the chroma highlighting rules work standalone.
+
+### Mermaid offscreen rendering
+
+`mermaid-bridge.js` is a first-cut primitive for native hosts (e.g. a
+mobile app with only an offscreen/headless webview, no on-screen page
+to let mermaid's `startOnLoad` scan) that need real SVG for a
+render-tree `Diagram` block instead of treating it as raw source text.
+Inject `mermaid.js` then `mermaid-bridge.js` into the same JS context,
+then call the one function it defines:
+
+    mdvRenderMermaid(id, source, theme).then(function (result) { ... })
+
+`id` should be the Diagram's render-tree `id` (unique per document);
+`source` is `Diagram.source`; `theme` is any mermaid theme name
+("default", "dark", "forest", "neutral", "base"), default "default".
+The promise always resolves (never rejects) to either
+`{ok:true, svg:"<svg ...>"}` or `{ok:false, error:"..."}`. Rendering
+itself still requires a real JS+DOM environment (mermaid uses browser
+text-measurement APIs) — this bridge does not make Mermaid renderable
+from pure Go/WASM without one; see the design note
+`.superpowers/specs/2026-08-28 Mermaid Offscreen-SVG Direction.md` in
+the library repo for the full rationale.
 
 Note: the generated header is not const-qualified (a cgo limitation);
 the library never writes through input pointers — cast as needed.

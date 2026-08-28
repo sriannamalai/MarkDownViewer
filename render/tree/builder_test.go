@@ -172,6 +172,34 @@ func TestCodeBlockRunsConcatenation(t *testing.T) {
 	}
 }
 
+// TestCodeBlockRunsCRLF pins the CRLF-fence highlighting fix through
+// the full parser→tree pipeline: a CRLF-terminated fence keeps its CRLF
+// bytes in Text (the parser doesn't normalize them away) and still
+// gets non-nil Runs whose concatenation reproduces Text exactly —
+// previously TokenRuns declined and Runs stayed nil for any such fence.
+// (Lone-\r-only line endings aren't exercised here: the parser's line
+// splitting doesn't treat a bare \r as a line break at all — a
+// pre-existing, separate limitation; render/html's TokenRuns is
+// exercised directly against lone-CR code text in tokenruns_test.go.)
+func TestCodeBlockRunsCRLF(t *testing.T) {
+	cases := []string{
+		"```go\r\nx := 1\r\ny := 2\r\n```\r\n",
+	}
+	for _, md := range cases {
+		cb := buildDefault(t, md).Blocks[0].(*tree.CodeBlock)
+		if cb.Runs == nil {
+			t.Fatalf("CRLF fence %q: runs nil, want highlighted", md)
+		}
+		var joined strings.Builder
+		for _, r := range cb.Runs {
+			joined.WriteString(r.Text)
+		}
+		if joined.String() != cb.Text {
+			t.Fatalf("CRLF fence %q: join(runs) = %q, want %q", md, joined.String(), cb.Text)
+		}
+	}
+}
+
 // TestConcurrentBuildRuns builds a code-heavy document from many
 // goroutines; under -race this gates the shared runs cache behind
 // Build, and every tree must marshal identically to the sequential one.
@@ -481,6 +509,126 @@ func TestFootnotePairing(t *testing.T) {
 	}
 	if len(refs) != 3 || refs[0] != 1 || refs[1] != 1 || refs[2] != 2 {
 		t.Fatalf("ref sites: %v", refs)
+	}
+}
+
+// TestFootnoteJumpToDefinition pins the ref→definition linkage primitive:
+// with Source set (content-hash ids), every FootnoteRef.DefID matches
+// its Footnote's ID exactly, and Tree.FootnoteByIndex resolves the same
+// definition regardless of Source.
+func TestFootnoteJumpToDefinition(t *testing.T) {
+	tr := buildDefault(t, "one[^a] two[^a] three[^b]\n\n[^a]: A body.\n[^b]: B body.\n")
+	a, b := tr.Footnotes[0], tr.Footnotes[1]
+	p := tr.Blocks[0].(*tree.Paragraph)
+	var refs []*tree.FootnoteRef
+	for _, in := range p.Children {
+		if r, ok := in.(*tree.FootnoteRef); ok {
+			refs = append(refs, r)
+		}
+	}
+	if len(refs) != 3 {
+		t.Fatalf("ref sites: %d", len(refs))
+	}
+	if refs[0].DefID != a.ID || refs[1].DefID != a.ID {
+		t.Fatalf("refs to [^a]: DefID %q, %q want %q", refs[0].DefID, refs[1].DefID, a.ID)
+	}
+	if refs[2].DefID != b.ID {
+		t.Fatalf("ref to [^b]: DefID %q want %q", refs[2].DefID, b.ID)
+	}
+	if a.ID == "" || b.ID == "" {
+		t.Fatal("footnote def ids must be non-empty when Source is set")
+	}
+	// FootnoteByIndex resolves the same definitions by index.
+	gotA, ok := tr.FootnoteByIndex(a.Index)
+	if !ok || gotA.ID != a.ID {
+		t.Fatalf("FootnoteByIndex(%d) = %+v, ok=%v", a.Index, gotA, ok)
+	}
+	if _, ok := tr.FootnoteByIndex(999); ok {
+		t.Fatal("FootnoteByIndex(999) succeeded, want not found")
+	}
+}
+
+// TestFootnoteDefIDFallbackMode: without Source, block ids (including
+// footnote def ids) take the positional fallback form instead of
+// content hashes, but FootnoteRef.DefID is still populated — matching
+// the corresponding Footnote.ID exactly, same as the content-hash
+// case — since it is backfilled after every Footnote's real id is
+// known, not precomputed ahead of the ordinal-assigning traversal.
+// This is the renderTreeDoc(parse(md)) path's shape (no source bytes
+// available), and must carry the same DefID-population guarantee the
+// renderTree(md) path does (see TestFootnoteRefDefIDPathParity).
+func TestFootnoteDefIDFallbackMode(t *testing.T) {
+	doc, err := parser.Parse([]byte("one[^a]\n\n[^a]: A body.\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, err := tree.Build(doc, tree.DefaultOptions()) // no Source
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tr.Footnotes) != 1 || tr.Footnotes[0].ID == "" {
+		t.Fatalf("footnote def: %+v", tr.Footnotes)
+	}
+	p := tr.Blocks[0].(*tree.Paragraph)
+	ref := p.Children[len(p.Children)-1].(*tree.FootnoteRef)
+	if ref.DefID == "" || ref.DefID != tr.Footnotes[0].ID {
+		t.Fatalf("DefID = %q, want %q (matching Footnote.ID)", ref.DefID, tr.Footnotes[0].ID)
+	}
+	def, ok := tr.FootnoteByIndex(ref.Index)
+	if !ok || def.ID != ref.DefID {
+		t.Fatalf("FootnoteByIndex mismatch: %+v ok=%v, want ID %q", def, ok, ref.DefID)
+	}
+}
+
+// TestFootnoteRefDefIDPathParity: DefID population must not depend on
+// which of the two build paths produced the tree — building straight
+// from markdown (Source set, renderTree's path) versus building from
+// an already-parsed document with no Source at hand (renderTreeDoc's
+// path) — since a host consuming either surface expects the same
+// jump-to-definition capability either way, even though the concrete
+// id VALUES legitimately differ (content hash vs. positional
+// fallback; see "Block identity").
+func TestFootnoteRefDefIDPathParity(t *testing.T) {
+	const md = "one[^a] two[^a] three[^b]\n\n[^a]: A body.\n[^b]: B body.\n"
+	doc, err := parser.Parse([]byte(md))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fromMarkdown := buildDefault(t, md) // Source set: the renderTree(md) shape
+	opts := tree.DefaultOptions()
+	opts.Source = nil // no Source: the renderTreeDoc(parse(md)) shape
+	fromDoc, err := tree.Build(doc, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refsOf := func(tr *tree.Tree) []*tree.FootnoteRef {
+		var refs []*tree.FootnoteRef
+		for _, in := range tr.Blocks[0].(*tree.Paragraph).Children {
+			if r, ok := in.(*tree.FootnoteRef); ok {
+				refs = append(refs, r)
+			}
+		}
+		return refs
+	}
+	for _, tc := range []struct {
+		name string
+		tr   *tree.Tree
+	}{{"renderTree(md)", fromMarkdown}, {"renderTreeDoc(parse(md))", fromDoc}} {
+		refs := refsOf(tc.tr)
+		if len(refs) != 3 {
+			t.Fatalf("%s: ref sites: %d", tc.name, len(refs))
+		}
+		for i, r := range refs {
+			if r.DefID == "" {
+				t.Errorf("%s: ref %d (index %d): DefID empty, want populated", tc.name, i, r.Index)
+				continue
+			}
+			def, ok := tc.tr.FootnoteByIndex(r.Index)
+			if !ok || def.ID != r.DefID {
+				t.Errorf("%s: ref %d: DefID %q does not match FootnoteByIndex(%d) = %+v ok=%v",
+					tc.name, i, r.DefID, r.Index, def, ok)
+			}
+		}
 	}
 }
 

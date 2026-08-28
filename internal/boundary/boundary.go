@@ -136,6 +136,8 @@ func Asset(name string) ([]byte, error) {
 	switch name {
 	case "mermaid.js":
 		return []byte(assets.MermaidJS()), nil
+	case "mermaid-bridge.js":
+		return []byte(assets.MermaidBridgeJS()), nil
 	case "katex.js":
 		return []byte(assets.KatexJS()), nil
 	case "katex.css":
@@ -155,7 +157,7 @@ func Asset(name string) ([]byte, error) {
 	case "highlight-dark.json":
 		return highlightJSONAsset(theme.Dark())
 	}
-	return nil, fmt.Errorf("unknown asset %q (valid: base.css, highlight-dark.json, highlight-light.json, katex.css, katex.js, mermaid.js, theme-dark.css, theme-dark.json, theme-light.css, theme-light.json)", name)
+	return nil, fmt.Errorf("unknown asset %q (valid: base.css, highlight-dark.json, highlight-light.json, katex.css, katex.js, mermaid-bridge.js, mermaid.js, theme-dark.css, theme-dark.json, theme-light.css, theme-light.json)", name)
 }
 
 func composedThemeCSS(t theme.Theme) ([]byte, error) {

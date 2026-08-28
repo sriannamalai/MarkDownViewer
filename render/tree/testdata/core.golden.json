@@ -1034,7 +1034,8 @@
         },
         {
           "kind": "footnoteRef",
-          "index": 1
+          "index": 1,
+          "defId": "49d5f5b9fe16eca3"
         }
       ]
     },

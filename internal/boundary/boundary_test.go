@@ -315,12 +315,13 @@ func TestEmptyInputs(t *testing.T) {
 
 func TestAssetImpl(t *testing.T) {
 	markers := map[string][]string{
-		"mermaid.js":       {"mermaid"},
-		"katex.js":         {"katex"},
-		"katex.css":        {"@font-face", "data:font"},
-		"base.css":         {"--md-max-width"},
-		"theme-light.css":  {"--md-bg", ".chroma"},
-		"theme-dark.css":   {"--md-bg", ".chroma"},
+		"mermaid.js":           {"mermaid"},
+		"mermaid-bridge.js":    {"mdvRenderMermaid", "mermaid.initialize"},
+		"katex.js":             {"katex"},
+		"katex.css":            {"@font-face", "data:font"},
+		"base.css":             {"--md-max-width"},
+		"theme-light.css":      {"--md-bg", ".chroma"},
+		"theme-dark.css":       {"--md-bg", ".chroma"},
 		"theme-light.json":     {"--md-bg", `"version"`},
 		"theme-dark.json":      {"--md-bg", `"version"`},
 		"highlight-light.json": {`"colors"`, `"Keyword"`, `"version"`, `"styles"`},
@@ -550,7 +551,7 @@ func TestAssetImplUnknown(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Asset(%q): want error", name)
 		}
-		for _, valid := range []string{"mermaid.js", "theme-dark.css", "theme-light.json", "theme-dark.json", "highlight-light.json", "highlight-dark.json"} {
+		for _, valid := range []string{"mermaid.js", "mermaid-bridge.js", "theme-dark.css", "theme-light.json", "theme-dark.json", "highlight-light.json", "highlight-dark.json"} {
 			if !strings.Contains(err.Error(), valid) {
 				t.Errorf("Asset(%q): error does not list valid name %q: %v", name, valid, err)
 			}
